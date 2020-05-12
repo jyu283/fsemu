@@ -44,7 +44,7 @@ static void alloc_fs(size_t size)
     }
     close(fd);
 
-    init_superblock(size);
+    init_fs(size);
 }
 
 /*
@@ -63,8 +63,7 @@ static inline void print_title(void)
     puts("FSEMU (File System EMUlator) 0.01-05.11.20");
     puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
     puts("License GPLv3+: GNU GPL version 3 or later");
-    puts("Type \"help\" for help.");
-    puts("Type \"quit\" to quit.");
+    puts("Type \"help\" for help. Type \"quit\" to quit.");
     puts("");
 }
 
@@ -74,7 +73,8 @@ static inline void print_title(void)
  */
 static inline void print_help(void)
 {
-    puts("Usage: fsemu");
+    puts("Usage: fsemu [input]");
+    puts("Note: file input is currently not supported.");
 }
 
 int main(int argc, char *argv[])
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
     /* Interactive mode only for now. */
     process(stdin);
+    
     munmap(fs, MAXFSSIZE);
-
     return 0;
 }
