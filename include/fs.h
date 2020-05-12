@@ -1,12 +1,15 @@
 #ifndef __FS_H__
 #define __FS_H__
 
+#include "fsemu.h"
+
 #include <string.h>
 #include <stdint.h>
 
 #define MAXFSSIZE   0x40000000
 #define BSIZE       0x200      // block size = 512 bytes
 #define INOPERBLK   (BSIZE / sizeof(struct inode))
+#define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
 /*
  * Simple File System layout diagram:
@@ -24,7 +27,8 @@ struct inode {
 	uint32_t       data[NADDR];
 };
 
-#define DENTRYNAMELEN   (64 - sizeof(struct inode *))
+#define DENTRYNAMELEN   (32 - sizeof(struct inode *))
+#define DENTPERBLK		(BSIZE / sizeof(struct dentry))
 
 struct dentry {
 	struct inode    *inode;
@@ -34,15 +38,19 @@ struct dentry {
 struct superblock {
 	uint64_t        size;       // total size in blocks
 	uint64_t        ninodes;    // number of inodes
+	uint64_t		datastart;	// data start block
 	uint64_t        nblocks;    // number of data blocks
 	struct inode    *inodes;
 	char            *bitmap;
-	char            *data;
 	struct dentry   rootdir;
 };
 
 extern char *fs;
 
 void init_fs(size_t size);
+
+#ifdef DEBUG
+int db_creat_at_root(const char *name, uint8_t type);
+#endif
 
 #endif  // __FS_H__

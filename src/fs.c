@@ -19,6 +19,7 @@ static void init_superblock(size_t size)
 
 	int total_blocks = size / BSIZE;
 	int inode_blocks = total_blocks * 0.03;
+	sb->size = total_blocks;
 	pr_debug("Total blocks: %d.\n", total_blocks);
 
 	sb->inodes = (struct inode *)(fs + BSIZE);
@@ -34,9 +35,10 @@ static void init_superblock(size_t size)
 				bitmap_blocks, sb->bitmap);
 
 	int nblocks = total_blocks - 1 - inode_blocks - bitmap_blocks;
-	sb->data = fs + BSIZE + inode_blocks * BSIZE + bitmap_blocks * BSIZE;
+	sb->datastart = inode_blocks + bitmap_blocks;
 	sb->nblocks = nblocks;
-	pr_debug("Allocated %d data blocks at %p.\n", nblocks, sb->data);
+	pr_debug("Allocated %d data blocks starting block %lu.\n", 
+				nblocks, sb->datastart);
 }
 
 /*
@@ -46,6 +48,7 @@ static void init_superblock(size_t size)
  */
 static struct inode *alloc_inode(uint8_t type)
 {
+	/* Inode 0 is reserved! */
 	struct inode *inode = sb->inodes + 1;
 	for (; inode < sb->inodes + sb->ninodes; inode++) {
 		if (inode->type == T_UNUSED) {
@@ -74,4 +77,91 @@ void init_fs(size_t size)
 	init_superblock(size);
 	init_rootdir();
 	pr_debug("File system initialization completed!\n");
+}
+
+/*
+ * Consult the bitmap and allocate a datablock.
+ */
+static uint64_t alloc_data_block(void)
+{
+	char *bm = sb->bitmap;
+	for (int i = 0; i < sb->size; i++) {
+		if (bm[i] != 0xff) {
+			for (int j = 0; j < 8; j++) {
+				if (((bm[i] >> j) & 1) == 0) {
+					bm[i] |= 1 << j;
+					return (sb->datastart + (i * 8 + j));
+				}
+			}
+		}
+	}
+	return -1;
+}
+
+/*
+ * Find an unused dentry spot from directory inode.
+ */
+static struct dentry *get_unused_dentry(struct inode *dir)
+{
+	struct dentry *dents;
+	int unused = -1;	// record of first unused block
+	for (int i = 0; i < NADDR - 1; i++) {
+		if (dir->data[i]) {
+			dents = BLKADDR(dir->data[i]);
+			for (int j = 0; j < DENTPERBLK; j++) {
+				if (dents[j].inode == NULL)
+					return &dents[j];
+			}
+		} else {
+			if (unused == -1) {
+				unused = i;
+			}
+		}
+	}
+
+	// If no unused blocks left or allocation function failed.
+	if (unused == -1 || (dir->data[unused] = alloc_data_block()) < 0) {
+		printf("Error: data allocation failed\n");
+		return NULL;
+	}
+
+	return (struct dentry *)BLKADDR(dir->data[unused]);
+}
+
+/*
+ * Create a file/directory/device.
+ * 
+ * This would have been a wonderful opportunity to correct
+ * Ken Thompson's "mistake" and name this function create().
+ * But I decided against it.
+ */
+int creat(struct inode *dir, const char *name, uint8_t type)
+{
+	if (dir->type != T_DIR) {
+		printf("Error: invalid inode type.\n");
+		return -1;
+	}
+	if (strlen(name) + 1 > DENTRYNAMELEN) {
+		printf("creat: name too long.\n");
+		return -1;
+	}
+	struct inode *inode = alloc_inode(type);
+	struct dentry *dent = get_unused_dentry(dir);
+	if (dent) {
+		dent->inode = inode;
+		strcpy(dent->name, name);
+		printf("Successfully created %s\n", name);
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
+/* 
+ * Debug function:
+ * Create a file/directory/device at root directory.
+ */
+int db_creat_at_root(const char *name, uint8_t type)
+{
+	return creat(sb->rootdir.inode, name, type);
 }
