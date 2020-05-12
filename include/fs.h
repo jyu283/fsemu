@@ -20,25 +20,25 @@
 #define NADDR       16
 
 struct inode {
-    uint8_t        type; 
-    uint32_t       data[NADDR];
+	uint8_t        type; 
+	uint32_t       data[NADDR];
 };
 
 #define DENTRYNAMELEN   (64 - sizeof(struct inode *))
 
 struct dentry {
-    struct inode    *inode;
-    char            name[DENTRYNAMELEN];
+	struct inode    *inode;
+	char            name[DENTRYNAMELEN];
 };
 
 struct superblock {
-    uint64_t        size;       // total size in blocks
-    uint64_t        ninodes;    // number of inodes
-    uint64_t        nblocks;    // number of data blocks
-    struct inode    *inodes;
-    char            *bitmap;
-    char            *data;
-    struct dentry   rootdir;
+	uint64_t        size;       // total size in blocks
+	uint64_t        ninodes;    // number of inodes
+	uint64_t        nblocks;    // number of data blocks
+	struct inode    *inodes;
+	char            *bitmap;
+	char            *data;
+	struct dentry   rootdir;
 };
 
 extern char *fs;

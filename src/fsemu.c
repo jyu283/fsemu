@@ -27,17 +27,17 @@ static size_t fs_size;
  */
 static void dump_fs(void)
 {
-    int fd;
-    if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
-        perror("open");
-        exit(1);
-    }
-    printf("Dumping file system to fs.img...\n");
-    if ((write(fd, fs, fs_size)) < 0) {
-        perror("write");
-        exit(1);
-    }
-    close(fd);
+	int fd;
+	if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
+		perror("open");
+		exit(1);
+	}
+	printf("Dumping file system to fs.img...\n");
+	if ((write(fd, fs, fs_size)) < 0) {
+		perror("write");
+		exit(1);
+	}
+	close(fd);
 }
 
 /*
@@ -45,25 +45,25 @@ static void dump_fs(void)
  */
 static void alloc_fs(size_t size)
 {
-    pr_debug("Allocating %lu bytes for file system...\n", size);
+	pr_debug("Allocating %lu bytes for file system...\n", size);
 
-    int fd;
-    if (size > MAXFSSIZE) {
-        printf("Error: file system size cannot be greater than 1GB.\n");
-        exit(0);
-    }
-    if ((fd = open("/dev/zero", O_RDWR)) < 0) {
-        perror("open");
-        exit(1);
-    }
-    fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (!fs) {
-        perror("mmap");
-        exit(1);
-    }
-    close(fd);
+	int fd;
+	if (size > MAXFSSIZE) {
+		printf("Error: file system size cannot be greater than 1GB.\n");
+		exit(0);
+	}
+	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
+		perror("open");
+		exit(1);
+	}
+	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	if (!fs) {
+		perror("mmap");
+		exit(1);
+	}
+	close(fd);
 
-    init_fs(size);
+	init_fs(size);
 }
 
 /*
@@ -79,11 +79,11 @@ static void process(FILE *fp)
  */ 
 static inline void print_title(void)
 {
-    puts("FSEMU (File System EMUlator) 0.01-05.11.20");
-    puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
-    puts("License GPLv3+: GNU GPL version 3 or later");
-    puts("Type \"help\" for help. Type \"quit\" to quit.");
-    puts("");
+	puts("FSEMU (File System EMUlator) 0.01-05.11.20");
+	puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
+	puts("License GPLv3+: GNU GPL version 3 or later");
+	puts("Type \"help\" for help. Type \"quit\" to quit.");
+	puts("");
 }
 
 /*
@@ -92,26 +92,26 @@ static inline void print_title(void)
  */
 static inline void print_help(void)
 {
-    puts("Usage: fsemu [input]");
-    puts("Note: file input is currently not supported.");
+	puts("Usage: fsemu [input]");
+	puts("Note: file input is currently not supported.");
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc != 1) {
-        print_help();
-        exit(0);
-    }
+	if (argc != 1) {
+		print_help();
+		exit(0);
+	}
 
-    print_title();
+	print_title();
 
-    fs_size = MAXFSSIZE;
-    alloc_fs(fs_size);  // 1GB fixed-sized for now.
+	fs_size = MAXFSSIZE;
+	alloc_fs(fs_size);  // 1GB fixed-sized for now.
 
-    /* Interactive mode only for now. */
-    process(stdin);
-    
-    dump_fs();
-    munmap(fs, fs_size);
-    return 0;
+	/* Interactive mode only for now. */
+	process(stdin);
+	
+	dump_fs();
+	munmap(fs, fs_size);
+	return 0;
 }
