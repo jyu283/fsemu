@@ -23,26 +23,27 @@
 #define NADDR       16
 
 struct inode {
-	uint8_t        type; 
-	uint32_t       data[NADDR];
+	uint8_t			type; 
+	uint8_t			refcount;
+	uint32_t		data[NADDR];
 };
 
 #define DENTRYNAMELEN   (32 - sizeof(struct inode *))
 #define DENTPERBLK		(BSIZE / sizeof(struct dentry))
 
 struct dentry {
-	struct inode    *inode;
-	char            name[DENTRYNAMELEN];
+	struct inode	*inode;
+	char			name[DENTRYNAMELEN];
 };
 
 struct superblock {
-	uint64_t        size;       // total size in blocks
-	uint64_t        ninodes;    // number of inodes
+	uint64_t		size;       // total size in blocks
+	uint64_t		ninodes;    // number of inodes
 	uint64_t		datastart;	// data start block
-	uint64_t        nblocks;    // number of data blocks
-	struct inode    *inodes;
-	char            *bitmap;
-	struct dentry   rootdir;
+	uint64_t		nblocks;    // number of data blocks
+	struct inode	*inodes;	// start of inodes
+	char			*bitmap;	// start of bitmap
+	struct dentry	rootdir;	// root dentry
 };
 
 extern char *fs;
@@ -51,6 +52,7 @@ void init_fs(size_t size);
 
 #ifdef DEBUG
 int db_creat_at_root(const char *name, uint8_t type);
+int db_mkdir_at_root(const char *name);
 #endif
 
 #endif  // __FS_H__

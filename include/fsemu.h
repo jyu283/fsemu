@@ -1,3 +1,6 @@
+#ifndef __FSEMU_H__
+#define __FSEMU_H__
+
 #include <stdio.h>
 
 #define DEBUG   
@@ -7,3 +10,7 @@
 #else
 #define pr_debug(...) do { } while (0)
 #endif
+
+extern char *fs;
+
+#endif  // __FSEMU_H__
