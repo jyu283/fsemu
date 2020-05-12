@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdint.h>
 
-static struct superblock *sb;
+struct superblock *sb;
 
 /*
  * Calculate the positions of each region of the file system.
@@ -60,26 +60,6 @@ static struct inode *alloc_inode(uint8_t type)
 }
 
 /*
- * Initializes the root directory by allocating an inode.
- */
-static void init_rootdir(void)
-{
-	strcpy(sb->rootdir.name, "/");
-	struct inode *rootino = alloc_inode(T_DIR);     
-	sb->rootdir.inode = rootino;
-}
-
-/*
- * Master function to initialize the file system.
- */
-void init_fs(size_t size)
-{
-	init_superblock(size);
-	init_rootdir();
-	pr_debug("File system initialization completed!\n");
-}
-
-/*
  * Consult the bitmap and allocate a datablock.
  */
 static uint64_t alloc_data_block(void)
@@ -128,6 +108,33 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 	return (struct dentry *)BLKADDR(dir->data[unused]);
 }
 
+static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
+{
+	struct dentry *dent = get_unused_dentry(dir);	
+	if (!dent)
+		return -1;
+
+	dent->inode = inode;
+	strcpy(dent->name, name);
+	return 0;
+}
+
+/*
+ * Create the . and .. dentries for a directory inode.
+ */
+static int init_dir_inode(struct inode *dir, struct inode *parent)
+{
+	if (new_dentry(dir, dir, ".") < 0) {
+		printf("Error: failed to create . dentry.\n");
+		return -1;
+	}
+	if (new_dentry(dir, parent, "..") < 0) {
+		printf("Error: failed to create .. dentry.\n");
+		return -1;
+	}
+	return 0;
+}
+
 /*
  * Create a file/directory/device.
  * 
@@ -146,16 +153,42 @@ int creat(struct inode *dir, const char *name, uint8_t type)
 		return -1;
 	}
 	struct inode *inode = alloc_inode(type);
-	struct dentry *dent = get_unused_dentry(dir);
-	if (dent) {
-		dent->inode = inode;
-		strcpy(dent->name, name);
-		printf("Successfully created %s\n", name);
-		return 0;
-	} else {
+	if (!inode) {
+		printf("Error: failed to allocate inode.\n");
 		return -1;
 	}
+	if (new_dentry(dir, inode, name) < 0) {
+		printf("Error: failed to create dentry %s.\n", name);
+		return -1;
+	}
+	if (type == T_DIR) {
+		if (init_dir_inode(inode, dir) < 0)
+			return -1;
+	}
+	return 0;
 }
+
+/*
+ * Initializes the root directory by allocating an inode.
+ */
+static void init_rootdir(void)
+{
+	strcpy(sb->rootdir.name, "/");
+	struct inode *rootino = alloc_inode(T_DIR);     
+	sb->rootdir.inode = rootino;
+	init_dir_inode(rootino, rootino);	// root inode parent is self
+}
+
+/*
+ * Master function to initialize the file system.
+ */
+void init_fs(size_t size)
+{
+	init_superblock(size);
+	init_rootdir();
+	pr_debug("File system initialization completed!\n");
+}
+
 
 /* 
  * Debug function:
@@ -164,4 +197,13 @@ int creat(struct inode *dir, const char *name, uint8_t type)
 int db_creat_at_root(const char *name, uint8_t type)
 {
 	return creat(sb->rootdir.inode, name, type);
+}
+
+/*
+ * Debug function:
+ * Create a directory inode at root directory.
+ */
+int db_mkdir_at_root(const char *name)
+{
+	return creat(sb->rootdir.inode, name, T_DIR);
 }
