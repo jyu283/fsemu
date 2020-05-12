@@ -1,5 +1,5 @@
 #include "fs.h"
-#include "syscall.h"
+#include "fs_syscall.h"
 #include "fsemu.h"
 
 #include <string.h>
@@ -113,7 +113,7 @@ static inline void init_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
 	dent->inode = inode;
-	inode->refcount++;
+	inode->nlink++;
 	strcpy(dent->name, name);
 }
 
@@ -195,6 +195,96 @@ void init_fs(size_t size)
 	pr_debug("File system initialization completed!\n");
 }
 
+static struct dentry *find_dent_in_block(uint32_t blocknum,
+										 const char *name)
+{
+	struct dentry *dents = (struct dentry *)BLKADDR(blocknum);
+	for (int i = 0; i < DENTPERBLK; i++) {
+		if (dents[i].inode && strcmp(dents[i].name, name) == 0) {
+			return &dents[i];
+		}
+	}
+	return NULL;
+}
+
+/**
+ * Lookup a dentry in a given directory (inode).
+ * Helper function for lookup() but for now it's basically all
+ * lookup() does.
+ */
+static struct dentry *dir_lookup(const struct inode *dir,
+								 const char *name)
+{
+	struct dentry *dent = NULL;
+	for (int i = 0; i < NADDR - 1; i++) {
+		if (dir->data[i]) {
+			dent = find_dent_in_block(dir->data[i], name);
+			if (dent)
+				return dent;
+		}
+	}
+	return NULL;
+}
+
+/**
+ * Lookup the provided pathname.
+ * Currently no support for relative pathnames.
+ * For now pathname is just a file name, assumed to be in root.
+ */
+static struct dentry *lookup(const char *pathname)
+{
+	struct dentry *dent;
+	
+	dent = dir_lookup(sb->rootdir.inode, pathname);
+	return dent;
+}
+
+/**
+ * Find an unused file struct and return its index 
+ * as the file descriptor.
+ */
+static int get_open_fd(void)
+{
+	for (int i = 0; i < MAXOPENFILES; i++) {
+		if (!(openfiles[i].f_dentry)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Basic version of the POSIX open system call.
+ * Currently no support for flags/modes as there are no
+ * processes yet.
+ */
+int fs_open(const char *pathname)
+{
+	int fd;
+	struct dentry *dent;
+
+	if ((fd = get_open_fd()) < 0)
+		return -1;
+	if ((dent = lookup(pathname)) == NULL)
+		return -1;
+
+	openfiles[fd].f_dentry = dent;
+	openfiles[fd].offset = 0;
+	return fd;
+}
+
+/**
+ * Basic version of the POSX close system call.
+ */
+int fs_close(int fd)
+{
+	if (fd < 0 || fd >= MAXOPENFILES)
+		return -1;
+
+	openfiles[fd].f_dentry = NULL;
+	openfiles[fd].offset = 0;
+	return 0;
+}
 
 /* 
  * Debug function:

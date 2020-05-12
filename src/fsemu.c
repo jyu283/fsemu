@@ -9,6 +9,7 @@
 
 #include "fs.h"
 #include "fs_syscall.h"
+#include "util.h"
 #include "fsemu.h"
 
 #include <sys/types.h>
@@ -22,6 +23,9 @@
 
 char *fs = NULL;
 static size_t fs_size;
+
+/* File descriptors */
+struct file openfiles[MAXOPENFILES];
 
 /*
  * Create a dump of the entire file system
@@ -72,7 +76,22 @@ static void alloc_fs(size_t size)
  */
 static void process(FILE *fp)
 {
-
+	char filename[DENTRYNAMELEN];
+	for (int i = 0; i < 10; i++) {
+		sprintf(filename, "testfile%d", i);
+		db_creat_at_root(filename, T_REG);
+	}
+	for (int i = 0; i < 5; i++) {
+		sprintf(filename, "device%d", i);
+		db_creat_at_root(filename, T_DEV);
+	}
+	db_creat_at_root("oentest", T_REG);
+	for (int i = 0; i < 10; i++) {
+		sprintf(filename, "testdir%d", i);
+		db_creat_at_root(filename, T_DIR);
+	}
+	int fd = fs_open("opentest");
+	fs_close(fd);
 }
 
 /*

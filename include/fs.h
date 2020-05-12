@@ -2,6 +2,7 @@
 #define __FS_H__
 
 #include "fsemu.h"
+#include "file.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -23,7 +24,7 @@
 #define NADDR       16
 
 struct inode {
-	uint32_t		refcount;
+	uint32_t		nlink;
 	uint32_t		data[NADDR];
 	uint8_t			type; 
 };
