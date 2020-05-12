@@ -20,6 +20,25 @@
 #include <string.h>
 
 char *fs = NULL;
+static size_t fs_size;
+
+/*
+ * Create a dump of the entire file system
+ */
+static void dump_fs(void)
+{
+    int fd;
+    if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
+        perror("open");
+        exit(1);
+    }
+    printf("Dumping file system to fs.img...\n");
+    if ((write(fd, fs, fs_size)) < 0) {
+        perror("write");
+        exit(1);
+    }
+    close(fd);
+}
 
 /*
  * Allocates space for file system in memory.
@@ -85,11 +104,14 @@ int main(int argc, char *argv[])
     }
 
     print_title();
-    alloc_fs(MAXFSSIZE);  // 1GB fixed-sized for now.
+
+    fs_size = MAXFSSIZE;
+    alloc_fs(fs_size);  // 1GB fixed-sized for now.
 
     /* Interactive mode only for now. */
     process(stdin);
     
-    munmap(fs, MAXFSSIZE);
+    dump_fs();
+    munmap(fs, fs_size);
     return 0;
 }
