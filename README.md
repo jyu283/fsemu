@@ -1,6 +1,6 @@
 # FileSystem EMUlator (fsemu)
 
-A user space file system emulator designed to explore the CPU cache performanc of different filesystem implementations.
+A user space file system emulator designed to explore the CPU cache performance of different filesystem implementations.
 
 #### Currently under construction.
 
