@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "syscall.h"
 #include "fsemu.h"
 
 #include <string.h>

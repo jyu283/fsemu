@@ -8,6 +8,7 @@
  */
 
 #include "fs.h"
+#include "fs_syscall.h"
 #include "fsemu.h"
 
 #include <sys/types.h>
