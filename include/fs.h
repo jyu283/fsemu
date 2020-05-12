@@ -46,13 +46,6 @@ struct superblock {
 	struct dentry	rootdir;	// root dentry
 };
 
-extern char *fs;
-
-void init_fs(size_t size);
-
-#ifdef DEBUG
-int db_creat_at_root(const char *name, uint8_t type);
-int db_mkdir_at_root(const char *name);
-#endif
+extern struct superblock *sb;
 
 #endif  // __FS_H__
