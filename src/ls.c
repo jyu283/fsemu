@@ -25,9 +25,10 @@ static inline void print_dirents(uint32_t block_num)
     struct dentry *dents = (struct dentry *)BLKADDR(block_num);
     for (int i = 0; i < DENTPERBLK; i++) {
         if (dents[i].inode) {
-            printf("%s %-16s \t[%p]\n", 
+            printf("%s %-16s \t[%p] [%d]\n", 
                 type_names[dents[i].inode->type],
-                dents[i].name, dents[i].inode);
+                dents[i].name, dents[i].inode, 
+                dents[i].inode->refcount);
         }
     }
 }

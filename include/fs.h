@@ -23,9 +23,9 @@
 #define NADDR       16
 
 struct inode {
-	uint8_t			type; 
-	uint8_t			refcount;
+	uint32_t		refcount;
 	uint32_t		data[NADDR];
+	uint8_t			type; 
 };
 
 #define DENTRYNAMELEN   (32 - sizeof(struct inode *))

@@ -108,14 +108,20 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 	return (struct dentry *)BLKADDR(dir->data[unused]);
 }
 
+static inline void init_dent(struct dentry *dent, struct inode *inode,
+							const char *name)
+{
+	dent->inode = inode;
+	inode->refcount++;
+	strcpy(dent->name, name);
+}
+
 static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
 {
 	struct dentry *dent = get_unused_dentry(dir);	
 	if (!dent)
 		return -1;
-
-	dent->inode = inode;
-	strcpy(dent->name, name);
+	init_dent(dent, inode, name);
 	return 0;
 }
 
@@ -173,9 +179,8 @@ int creat(struct inode *dir, const char *name, uint8_t type)
  */
 static void init_rootdir(void)
 {
-	strcpy(sb->rootdir.name, "/");
 	struct inode *rootino = alloc_inode(T_DIR);     
-	sb->rootdir.inode = rootino;
+	init_dent(&sb->rootdir, rootino, "/");
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
