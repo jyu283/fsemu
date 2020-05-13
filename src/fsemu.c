@@ -7,7 +7,6 @@
  * Copyright (c) 2020 Arpaci-Dusseau Systems Lab. (Fancy!)
  */
 
-#include "fs.h"
 #include "fs_syscall.h"
 #include "util.h"
 #include "fsemu.h"
@@ -21,8 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *fs = NULL;
-static size_t fs_size;
+char *fs = NULL;	// pointer to start of file system.
+static size_t fs_size;	// size of file system.
 
 /* File descriptors */
 struct file openfiles[MAXOPENFILES];
@@ -66,8 +65,7 @@ static void alloc_fs(size_t size)
 		perror("mmap");
 		exit(1);
 	}
-	close(fd);
-
+	close(fd); 
 	init_fs(size);
 }
 
@@ -85,12 +83,17 @@ static void process(FILE *fp)
 		sprintf(filename, "device%d", i);
 		db_creat_at_root(filename, T_DEV);
 	}
-	db_creat_at_root("oentest", T_REG);
+	db_creat_at_root("opentest", T_REG);
 	for (int i = 0; i < 10; i++) {
 		sprintf(filename, "testdir%d", i);
 		db_creat_at_root(filename, T_DIR);
 	}
+	ls();
 	int fd = fs_open("opentest");
+	if (fd < 0) {
+		printf("Failed to open file.\n");
+	}
+	lsfd();
 	fs_close(fd);
 }
 
