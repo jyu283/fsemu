@@ -9,5 +9,6 @@ void init_fs(size_t size);
 
 // Pseudo-user programs
 int ls(void);
+void lsfd(void);
 
 #endif  // __UTIL_H__

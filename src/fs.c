@@ -185,18 +185,26 @@ static void init_rootdir(void)
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
+static void init_fd(void)
+{
+	for (int i = 0; i < MAXOPENFILES; i++) {
+		openfiles[i].f_dentry = NULL;
+		openfiles[i].offset = 0;
+	}
+}
+
 /*
  * Master function to initialize the file system.
  */
 void init_fs(size_t size)
 {
-	init_superblock(size);
-	init_rootdir();
+	init_superblock(size);	// fill in superblock
+	init_rootdir();			// create root directory
+	init_fd();				// create file descriptors
 	pr_debug("File system initialization completed!\n");
 }
 
-static struct dentry *find_dent_in_block(uint32_t blocknum,
-										 const char *name)
+static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 {
 	struct dentry *dents = (struct dentry *)BLKADDR(blocknum);
 	for (int i = 0; i < DENTPERBLK; i++) {
@@ -212,8 +220,7 @@ static struct dentry *find_dent_in_block(uint32_t blocknum,
  * Helper function for lookup() but for now it's basically all
  * lookup() does.
  */
-static struct dentry *dir_lookup(const struct inode *dir,
-								 const char *name)
+static struct dentry *dir_lookup(const struct inode *dir, const char *name)
 {
 	struct dentry *dent = NULL;
 	for (int i = 0; i < NADDR - 1; i++) {
