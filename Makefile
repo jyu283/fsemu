@@ -24,22 +24,20 @@ mkdir    = mkdir -p
 
 $(BINDIR)/$(TARGET): $(OBJECTS)
 	@$(mkdir) $(BINDIR)
-	@$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
+	$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
 	@$(rm) $(TARGET)
 	@ln -s $(BINDIR)/$(TARGET)
-	@echo "Linking complete!"
 
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(OBJDIR)
-	@echo "Compiling "$<"..."
-	@$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:
-	@$(rm) $(OBJECTS)
-	@echo "Cleanup complete!"
+	$(rm) $(OBJECTS)
+	$(rm) $(BINDIR)/$(TARGET)
+	$(rm) $(TARGET)
 
 .PHONY: remove
 remove: clean
 	@$(rm) $(BINDIR)/$(TARGET)
-	@echo "Executable removed!"
