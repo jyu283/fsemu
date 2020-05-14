@@ -20,6 +20,8 @@
 #include "fs.h"
 #include "fsemu.h"
 
+int fs_mount(unsigned long size);
+int fs_unmount(void);
 int fs_open(const char *pathname);
 int fs_close(int fd);
 int fs_unlink(const char *pathname);

@@ -2,9 +2,15 @@
 #include "fs_syscall.h"
 #include "fsemu.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdint.h>
 
+char *fs;
 struct superblock *sb;
 
 /*
@@ -209,12 +215,9 @@ static int init_dir_inode(struct inode *dir, struct inode *parent)
 
 /*
  * Create a file/directory/device.
- * 
- * This would have been a wonderful opportunity to correct
- * Ken Thompson's "mistake" and name this function create().
- * But I decided against it.
+ * This is *not* the system call.
  */
-int creat(struct inode *dir, const char *name, uint8_t type)
+int do_creat(struct inode *dir, const char *name, uint8_t type)
 {
 	if (dir->type != T_DIR) {
 		printf("Error: invalid inode type.\n");
@@ -261,7 +264,7 @@ static void init_fd(void)
 /*
  * Master function to initialize the file system.
  */
-void init_fs(size_t size)
+static void init_fs(size_t size)
 {
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
@@ -374,13 +377,66 @@ int fs_unlink(const char *pathname)
 	return 0;
 }
 
+/*
+ * Allocates space for file system in memory.
+ */
+int fs_mount(unsigned long size)
+{
+	pr_debug("Allocating %lu bytes for file system...\n", size);
+
+	int fd;
+	if (size > MAXFSSIZE) {
+		printf("Error: file system size cannot be greater than 1GB.\n");
+		return -1;
+	}
+	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
+		perror("open");
+		return -1;
+	}
+	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	if (!fs) {
+		perror("mmap");
+		return -1;
+	}
+	close(fd); 
+	init_fs(size);
+	return 0;
+}
+
+/*
+ * Create a dump of the entire file system
+ */
+static void dump_fs(void)
+{
+	int fd;
+	if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
+		perror("open");
+		return;
+	}
+	printf("Dumping file system to fs.img...\n");
+	if ((write(fd, fs, sb->size)) < 0) {
+		perror("write");
+	}
+	close(fd);
+}
+
+/**
+ * Unmounts the file system.
+ */
+int fs_unmount(void)
+{
+	dump_fs();
+	munmap(fs, sb->size * BSIZE);
+	return 0;
+}
+
 /* 
  * Debug function:
  * Create a file/directory/device at root directory.
  */
 int db_creat_at_root(const char *name, uint8_t type)
 {
-	return creat(sb->rootdir.inode, name, type);
+	return do_creat(sb->rootdir.inode, name, type);
 }
 
 /*
@@ -389,5 +445,5 @@ int db_creat_at_root(const char *name, uint8_t type)
  */
 int db_mkdir_at_root(const char *name)
 {
-	return creat(sb->rootdir.inode, name, T_DIR);
+	return do_creat(sb->rootdir.inode, name, T_DIR);
 }

@@ -47,6 +47,7 @@ struct superblock {
 	struct dentry	rootdir;	// root dentry
 };
 
+extern char *fs;
 extern struct superblock *sb;
 
 #endif  // __FS_H__

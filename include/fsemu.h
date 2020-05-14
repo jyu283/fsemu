@@ -15,7 +15,14 @@
 
 #define MAXOPENFILES    32
 
-extern char *fs;
+/* 
+ * Plan to simulate processes with threads. By which time
+ * things like the openfiles array should be a property of
+ * each individual process. Right now we consider the entire
+ * emulator as a single process -- which of course it is but
+ * in a difference sense.
+ */
+
 extern struct file openfiles[MAXOPENFILES];
 
 #endif  // __FSEMU_H__

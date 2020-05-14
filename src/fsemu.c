@@ -11,11 +11,6 @@
 #include "util.h"
 #include "fsemu.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,49 +20,6 @@ static size_t fs_size;	// size of file system.
 
 /* File descriptors */
 struct file openfiles[MAXOPENFILES];
-
-/*
- * Create a dump of the entire file system
- */
-static void dump_fs(void)
-{
-	int fd;
-	if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
-		perror("open");
-		exit(1);
-	}
-	printf("Dumping file system to fs.img...\n");
-	if ((write(fd, fs, fs_size)) < 0) {
-		perror("write");
-		exit(1);
-	}
-	close(fd);
-}
-
-/*
- * Allocates space for file system in memory.
- */
-static void alloc_fs(size_t size)
-{
-	pr_debug("Allocating %lu bytes for file system...\n", size);
-
-	int fd;
-	if (size > MAXFSSIZE) {
-		printf("Error: file system size cannot be greater than 1GB.\n");
-		exit(0);
-	}
-	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
-		perror("open");
-		exit(1);
-	}
-	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-	if (!fs) {
-		perror("mmap");
-		exit(1);
-	}
-	close(fd); 
-	init_fs(size);
-}
 
 /*
  * Processes instructions either from stdin or from a batch file.
@@ -95,6 +47,10 @@ static void process(FILE *fp)
 	}
 	lsfd();
 	fs_close(fd);
+	printf("Removing testfile0 and device 0...\n");
+	fs_unlink("testfile0");
+	fs_unlink("device0");
+	ls();
 }
 
 /*
@@ -129,12 +85,15 @@ int main(int argc, char *argv[])
 	print_title();
 
 	fs_size = MAXFSSIZE;
-	alloc_fs(fs_size);  // 1GB fixed-sized for now.
+
+	if (fs_mount(fs_size) < 0) {
+		printf("Error: failed to mount file system.\n");
+		exit(0);
+	}
 
 	/* Interactive mode only for now. */
 	process(stdin);
 	
-	dump_fs();
-	munmap(fs, fs_size);
+	fs_unmount();
 	return 0;
 }
