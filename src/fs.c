@@ -380,6 +380,8 @@ int fs_unlink(const char *pathname)
 	struct dentry *dent = lookup(pathname);
 	if (!dent)
 		return -1;
+	if (dent->inode->type == T_DIR)
+		return -1;
 	free_dent(dent);
 	return 0;
 }
@@ -394,6 +396,8 @@ int fs_link(const char *oldpath, const char *newpath)
 	if (!olddent)
 		return -1;
 	struct inode *inode = olddent->inode;
+	if (inode->type == T_DIR)
+		return -1;
 
 	// make sure newpath doesn't already exist
 	if (lookup(newpath))
