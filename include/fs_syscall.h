@@ -17,7 +17,6 @@
 #ifndef __SYSCALL_H__
 #define __SYSCALL_H__
 
-#include "fs.h"
 #include "fsemu.h"
 
 int fs_mount(unsigned long size);
