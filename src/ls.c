@@ -11,14 +11,15 @@ static char *type_names[] = {
 	[T_DEV]     "DEVICE"
 };
 
-/*
- * Print out a block of dentries in the following format:
+/**
+ * Print out a block of dentries in something resembling 
+ * the following format:
  * (Does not print out unused dentries)
  * 
- * DIR      .           (0x7fd81340)
- * DIR      ..          (0x7fd412a0)
- * FILE     hello.c     (0x7f4d9fd0)
- * FILE     hello       (0x7f4e0200)
+ * DIR      .        512   [0x7fd81340] [2]
+ * DIR      ..       512   [0x7fd412a0] [4]
+ * FILE     hello.c  54    [0x7f4d9fd0] [1]
+ * FILE     hello    231   [0x7f4e0200] [1]
  */
 static inline void print_dirents(uint32_t block_num)
 {
@@ -57,6 +58,9 @@ int ls(void)
 	return 0;
 }
 
+/**
+ * List all open file descriptors.
+ */
 void lsfd(void)
 {
 	printf("open file descriptors: \n");
