@@ -42,6 +42,49 @@ static void init_superblock(size_t size)
 				nblocks, sb->datastart);
 }
 
+/**
+ * Zero out a data block before allocating it to an inode.
+ */
+static void wipe_block(uint32_t blocknum)
+{
+	char *block = BLKADDR(blocknum);
+	memset(block, 0, BSIZE);
+}
+
+/*
+ * Consult the bitmap and allocate a datablock.
+ */
+static uint32_t alloc_data_block(void)
+{
+	uint32_t block = 0;
+	char *bm = sb->bitmap;
+	for (int i = 0; i < sb->size; i++) {
+		if (bm[i] != 0xff) {
+			for (int j = 0; j < 8; j++) {
+				if (((bm[i] >> j) & 1) == 0) {
+					bm[i] |= 1 << j;
+					block = sb->datastart + (i * 8 + j);
+					wipe_block(block);
+					goto out;
+				}
+			}
+		}
+	}
+out:
+	return block;
+}
+
+/**
+ * Free data block number b.
+ */
+static void free_data_block(uint32_t b)
+{
+	char *bm = sb->bitmap;
+	int byte = b / 8;
+	int bit = b % 8;
+	bm[byte] &= ~(1 << bit);
+}
+
 /*
  * Locates an unused (T_UNUSED) inode from the inode pool
  * and returns a pointer to that inode. Also initializes 
@@ -60,23 +103,20 @@ static struct inode *alloc_inode(uint8_t type)
 	return NULL;
 }
 
-/*
- * Consult the bitmap and allocate a datablock.
+/**
+ * Frees an inode and all the data blocks it uses.
  */
-static uint64_t alloc_data_block(void)
+static int free_inode(struct inode *inode)
 {
-	char *bm = sb->bitmap;
-	for (int i = 0; i < sb->size; i++) {
-		if (bm[i] != 0xff) {
-			for (int j = 0; j < 8; j++) {
-				if (((bm[i] >> j) & 1) == 0) {
-					bm[i] |= 1 << j;
-					return (sb->datastart + (i * 8 + j));
-				}
-			}
-		}
+	if (inode->nlink > 0)
+		return -1;
+
+	for (int i = 0; i < NADDR; i++) {
+		if (inode->data[i])
+			free_data_block(inode->data[i]);
 	}
-	return -1;
+	inode->type = T_UNUSED;
+	return 0;
 }
 
 /*
@@ -101,7 +141,7 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 	}
 
 	// If no unused blocks left or allocation function failed.
-	if (unused == -1 || (dir->data[unused] = alloc_data_block()) < 0) {
+	if (unused == -1 || (dir->data[unused] = alloc_data_block()) == 0) {
 		printf("Error: data allocation failed\n");
 		return NULL;
 	}
@@ -109,12 +149,37 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 	return (struct dentry *)BLKADDR(dir->data[unused]);
 }
 
+/**
+ * Initialize a dentry with a name and link it to the inode.
+ * As a result of this linkage, the inode's nlink is incremented.
+ */
 static inline void init_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
 	dent->inode = inode;
 	inode->nlink++;
 	strcpy(dent->name, name);
+}
+
+/**
+ * Free a dentry and unlink it from the inode.
+ * As a result of this unlinking, the inode's nlink is decremented.
+ */
+static inline void free_dent(struct dentry *dent)
+{
+	struct inode *inode = dent->inode;
+
+	dent->inode = NULL;
+	dent->name[0] = '\0';
+
+	/* This check should be redundant. */
+	if (inode) {
+		inode->nlink--;	 // Can be done in if clause. I know. Keep quiet.
+		// If inode nlink becomes 0, deallocate that inode.
+		if (inode->nlink == 0) {
+			free_inode(inode);
+		}
+	}
 }
 
 static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
@@ -281,7 +346,7 @@ int fs_open(const char *pathname)
 }
 
 /**
- * Basic version of the POSX close system call.
+ * Basic version of the POSIX close system call.
  */
 int fs_close(int fd)
 {
@@ -290,6 +355,22 @@ int fs_close(int fd)
 
 	openfiles[fd].f_dentry = NULL;
 	openfiles[fd].offset = 0;
+	return 0;
+}
+
+/**
+ * Basic version of the POSIX unlink system call.
+ * Again, no support yet for relative paths or even path 
+ * interpretation. By default, we assume pathname to simply
+ * be a filename in the root directory.
+ */
+int fs_unlink(const char *pathname)
+{
+	struct inode *parentdir = sb->rootdir.inode;
+	struct dentry *dent = lookup(pathname);
+	if (!dent)
+		return -1;
+	free_dent(dent);
 	return 0;
 }
 
