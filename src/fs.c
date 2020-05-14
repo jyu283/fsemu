@@ -69,7 +69,7 @@ static uint32_t alloc_data_block(void)
 			for (int j = 0; j < 8; j++) {
 				if (((bm[i] >> j) & 1) == 0) {
 					bm[i] |= 1 << j;
-					block = sb->datastart + (i * 8 + j);
+/* Holy indent!	*/	block = sb->datastart + (i * 8 + j);
 					wipe_block(block);
 					goto out;
 				}
@@ -195,6 +195,10 @@ static inline void free_dent(struct dentry *dent)
 	}
 }
 
+/**
+ * Find an unused dentry in dir and initialize it with
+ * a name and an inode.
+ */
 static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
 {
 	struct dentry *dent = get_unused_dentry(dir);	

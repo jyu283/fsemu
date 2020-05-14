@@ -50,6 +50,9 @@ static void process(FILE *fp)
 	printf("Removing testfile0 and device 0...\n");
 	fs_unlink("testfile0");
 	fs_unlink("device0");
+	fs_link("opentest", "opentest_link");
+	ls();
+	fs_unlink("opentest");
 	ls();
 }
 
