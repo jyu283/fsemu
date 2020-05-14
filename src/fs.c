@@ -377,6 +377,24 @@ int fs_unlink(const char *pathname)
 	return 0;
 }
 
+/**
+ * Basic version of the POSIX link system call.
+ * No support for sophisticated path lookup. Yada yada yada.
+ */
+int fs_link(const char *oldpath, const char *newpath)
+{
+	struct dentry *olddent = lookup(oldpath);
+	if (!olddent)
+		return -1;
+	struct inode *inode = olddent->inode;
+
+	// make sure newpath doesn't already exist
+	if (lookup(newpath))
+		return -1;
+
+	return new_dentry(sb->rootdir.inode, inode, newpath);
+}
+
 /*
  * Allocates space for file system in memory.
  */

@@ -25,6 +25,7 @@ int fs_unmount(void);
 int fs_open(const char *pathname);
 int fs_close(int fd);
 int fs_unlink(const char *pathname);
+int fs_link(const char *oldpath, const char *newpath);
 
 // Debug functions
 // If around declarations because these functions should
