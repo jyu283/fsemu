@@ -5,10 +5,10 @@
 #include <stdio.h>
 
 static char *type_names[] = {
-    [T_UNUSED]  "UNUSED",
-    [T_REG]     "FILE  ",
-    [T_DIR]     "DIR   ",
-    [T_DEV]     "DEVICE"
+	[T_UNUSED]  "UNUSED",
+	[T_REG]     "FILE  ",
+	[T_DIR]     "DIR   ",
+	[T_DEV]     "DEVICE"
 };
 
 /*
@@ -22,15 +22,15 @@ static char *type_names[] = {
  */
 static inline void print_dirents(uint32_t block_num)
 {
-    struct dentry *dents = (struct dentry *)BLKADDR(block_num);
-    for (int i = 0; i < DENTPERBLK; i++) {
-        if (dents[i].inode) {
-            printf("%s %-16s \t[%p] [%d]\n", 
-                type_names[dents[i].inode->type],
-                dents[i].name, dents[i].inode, 
-                dents[i].inode->nlink);
-        }
-    }
+	struct dentry *dents = (struct dentry *)BLKADDR(block_num);
+	for (int i = 0; i < DENTPERBLK; i++) {
+		if (dents[i].inode) {
+			printf("%s %-16s %-6d [%p] [%d]\n", 
+				type_names[dents[i].inode->type],
+				dents[i].name, dents[i].inode->size,
+				dents[i].inode, dents[i].inode->nlink);
+		}
+	}
 }
 
 /*
@@ -38,33 +38,33 @@ static inline void print_dirents(uint32_t block_num)
  */
 static void ls_dir(struct dentry *dent)
 {
-    printf("%s \n", dent->name);
-    struct inode *inode = dent->inode;
-    if (inode->type != T_DIR)
-        return;
-    for (int i = 0; i < NADDR; i++) {
-        if (inode->data[i]) {
-            print_dirents(inode->data[i]);
-        }
-    }
+	printf("%s \n", dent->name);
+	struct inode *inode = dent->inode;
+	if (inode->type != T_DIR)
+		return;
+	for (int i = 0; i < NADDR; i++) {
+		if (inode->data[i]) {
+			print_dirents(inode->data[i]);
+		}
+	}
 }
 
 int ls(void)
 {
-    // For now only prints out the root's contents
-    ls_dir(&sb->rootdir);
-    puts("");
-    return 0;
+	// For now only prints out the root's contents
+	ls_dir(&sb->rootdir);
+	puts("");
+	return 0;
 }
 
 void lsfd(void)
 {
-    printf("open file descriptors: \n");
-    for (int i = 0; i < MAXOPENFILES; i++) {
-        if (openfiles[i].f_dentry) {
-            printf(" [%d] %s (off=%lx)\n", i, openfiles[i].f_dentry->name,
-                                            openfiles[i].offset);
-        }
-    }
-    puts("");
+	printf("open file descriptors: \n");
+	for (int i = 0; i < MAXOPENFILES; i++) {
+		if (openfiles[i].f_dentry) {
+			printf(" [%d] %s (off=%lx)\n", i, openfiles[i].f_dentry->name,
+											openfiles[i].offset);
+		}
+	}
+	puts("");
 }

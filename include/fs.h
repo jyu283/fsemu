@@ -25,6 +25,7 @@
 
 struct inode {
 	uint32_t		nlink;
+	uint32_t		size;
 	uint32_t		data[NADDR];
 	uint8_t			type; 
 };

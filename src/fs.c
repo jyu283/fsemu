@@ -103,6 +103,7 @@ static struct inode *alloc_inode(uint8_t type)
 	for (; inode < sb->inodes + sb->ninodes; inode++) {
 		if (inode->type == T_UNUSED) {
 			inode->type = type;
+			inode->size = 0;
 			return inode;
 		}
 	}
@@ -118,8 +119,10 @@ static int free_inode(struct inode *inode)
 		return -1;
 
 	for (int i = 0; i < NADDR; i++) {
-		if (inode->data[i])
+		if (inode->data[i]) {
 			free_data_block(inode->data[i]);
+			inode->data[i] = 0;
+		}
 	}
 	inode->type = T_UNUSED;
 	return 0;
@@ -146,12 +149,16 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 		}
 	}
 
-	// If no unused blocks left or allocation function failed.
-	if (unused == -1 || (dir->data[unused] = alloc_data_block()) == 0) {
-		printf("Error: data allocation failed\n");
+	if (unused < 0)
+		return NULL;
+
+	// allocate new data block to unused address
+	if ((dir->data[unused] = alloc_data_block()) == 0) {
+		printf("Error: data allocation failed.\n");
 		return NULL;
 	}
 
+	dir->size += BSIZE;  // increase directory size by one block
 	return (struct dentry *)BLKADDR(dir->data[unused]);
 }
 
