@@ -69,7 +69,7 @@ static uint32_t alloc_data_block(void)
 			for (int j = 0; j < 8; j++) {
 				if (((bm[i] >> j) & 1) == 0) {
 					bm[i] |= 1 << j;
-/* Holy indent!	*/	block = sb->datastart + (i * 8 + j);
+					block = sb->datastart + (i * 8 + j);
 					wipe_block(block);
 					goto out;
 				}
@@ -112,6 +112,9 @@ static struct inode *alloc_inode(uint8_t type)
 
 /**
  * Frees an inode and all the data blocks it uses.
+ * 
+ * Do not call this function to remove a file!
+ * Use free_dent instead which will call this function.
  */
 static int free_inode(struct inode *inode)
 {
@@ -175,6 +178,8 @@ static inline void init_dent(struct dentry *dent, struct inode *inode,
 }
 
 /**
+ * This should be the function called when removing a file!
+ * 
  * Free a dentry and unlink it from the inode.
  * As a result of this unlinking, the inode's nlink is decremented.
  */
@@ -409,6 +414,69 @@ int fs_link(const char *oldpath, const char *newpath)
 
 	return new_dentry(sb->rootdir.inode, inode, newpath);
 }
+
+/**
+ * Basic version of the POSIX mkdir() system call.
+ */
+int fs_mkdir(const char *pathname)
+{
+	if (lookup(pathname))
+		return -1;
+
+	return do_creat(sb->rootdir.inode, pathname, T_DIR);
+}
+
+/**
+ * Check if a block of dentries contains no valid dentries
+ * (apart from the . and .. entries).
+ */
+static int dir_block_isempty(uint32_t b)
+{
+	struct dentry *dents = (struct dentry *)BLKADDR(b);
+	for (int i = 0; i < DENTPERBLK; i++) {
+		if (dents[i].inode) {
+			if (strcmp(dents[i].name, ".") == 0)
+				continue;
+			if (strcmp(dents[i].name, "..") == 0)
+				continue;
+			// valid dentry is neither . nor ..
+			return -1;
+		}
+	}
+	return 0;
+}
+
+/**
+ * Check if a directory is empty.
+ */
+static int dir_isempty(struct inode *dir)
+{
+	for (int i = 0; i < NADDR; i++) {
+		if (dir->data[i]) {
+			if (!dir_block_isempty(dir->data[i]))
+				return -1;
+		}
+	}
+	return 0;
+}
+
+/**
+ * Basic version of the POSIX rmdir() system call.
+ */
+int fs_rmdir(const char *pathname)
+{
+	struct inode *parent = sb->rootdir.inode;
+	struct dentry *dent = lookup(pathname);
+	if (dent->inode->type != T_DIR)
+		return -1;
+	if (!dir_isempty(dent->inode))
+		return -1;
+
+	free_dent(dent);
+	parent->nlink--;
+	return 0;
+}
+
 
 /*
  * Allocates space for file system in memory.
