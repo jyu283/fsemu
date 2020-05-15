@@ -515,7 +515,7 @@ static void dump_fs(void)
 		return;
 	}
 	printf("Dumping file system to fs.img...\n");
-	if ((write(fd, fs, sb->size)) < 0) {
+	if ((write(fd, fs, sb->size * BSIZE)) < 0) {
 		perror("write");
 	}
 	close(fd);
