@@ -26,34 +26,7 @@ struct file openfiles[MAXOPENFILES];
  */
 static void process(FILE *fp)
 {
-	char filename[DENTRYNAMELEN];
-	for (int i = 0; i < 10; i++) {
-		sprintf(filename, "testfile%d", i);
-		db_creat_at_root(filename, T_REG);
-	}
-	for (int i = 0; i < 5; i++) {
-		sprintf(filename, "device%d", i);
-		db_creat_at_root(filename, T_DEV);
-	}
-	db_creat_at_root("opentest", T_REG);
-	for (int i = 0; i < 10; i++) {
-		sprintf(filename, "testdir%d", i);
-		db_creat_at_root(filename, T_DIR);
-	}
-	ls();
-	int fd = fs_open("opentest");
-	if (fd < 0) {
-		printf("Failed to open file.\n");
-	}
-	lsfd();
-	fs_close(fd);
-	printf("Removing testfile0 and device 0...\n");
-	fs_unlink("testfile0");
-	fs_unlink("device0");
-	fs_link("opentest", "opentest_link");
-	ls();
-	fs_unlink("opentest");
-	ls();
+
 }
 
 /*
@@ -95,7 +68,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* Interactive mode only for now. */
-	process(stdin);
+	// process(stdin);
+
+	test();
 	
 	fs_unmount();
 	return 0;

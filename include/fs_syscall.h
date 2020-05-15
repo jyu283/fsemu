@@ -34,6 +34,7 @@ int fs_rmdir(const char *pathname);
 #ifdef DEBUG
 int db_creat_at_root(const char *name, uint8_t type);
 int db_mkdir_at_root(const char *name);
+void test(void);
 #endif
 
 
