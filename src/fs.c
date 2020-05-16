@@ -7,6 +7,7 @@
 
 #include "fs.h"
 #include "fs_syscall.h"
+#include "fserror.h"
 #include "util.h"
 #include "fsemu.h"
 
@@ -191,7 +192,7 @@ static inline void init_dent(struct dentry *dent, struct inode *inode,
  * Free a dentry and unlink it from the inode.
  * As a result of this unlinking, the inode's nlink is decremented.
  */
-static inline void free_dent(struct dentry *dent)
+static void free_dent(struct dentry *dent)
 {
 	struct inode *inode = dent->inode;
 
@@ -216,7 +217,7 @@ static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
 {
 	struct dentry *dent = get_unused_dentry(dir);	
 	if (!dent)
-		return -1;
+		return -EALLOC;
 	init_dent(dent, inode, name);
 	return 0;
 }
@@ -228,11 +229,11 @@ static int init_dir_inode(struct inode *dir, struct inode *parent)
 {
 	if (new_dentry(dir, dir, ".") < 0) {
 		printf("Error: failed to create . dentry.\n");
-		return -1;
+		return -EALLOC;
 	}
 	if (new_dentry(dir, parent, "..") < 0) {
 		printf("Error: failed to create .. dentry.\n");
-		return -1;
+		return -EALLOC;
 	}
 	return 0;
 }
@@ -243,26 +244,28 @@ static int init_dir_inode(struct inode *dir, struct inode *parent)
  */
 int do_creat(struct inode *dir, const char *name, uint8_t type)
 {
+	int ret;
+
 	if (dir->type != T_DIR) {
 		printf("Error: invalid inode type.\n");
-		return -1;
+		return -EINVTYPE;
 	}
 	if (strlen(name) + 1 > DENTRYNAMELEN) {
 		printf("creat: name too long.\n");
-		return -1;
+		return -EINVNAME;
 	}
 	struct inode *inode = alloc_inode(type);
 	if (!inode) {
 		printf("Error: failed to allocate inode.\n");
-		return -1;
+		return -EALLOC;
 	}
 	if (new_dentry(dir, inode, name) < 0) {
 		printf("Error: failed to create dentry %s.\n", name);
-		return -1;
+		return -EALLOC;
 	}
 	if (type == T_DIR) {
-		if (init_dir_inode(inode, dir) < 0)
-			return -1;
+		if ((ret = init_dir_inode(inode, dir)) < 0)
+			return ret;
 	}
 	return 0;
 }
@@ -452,7 +455,7 @@ static int get_open_fd(void)
 			return i;
 		}
 	}
-	return -1;
+	return -ENOFD;
 }
 
 /**
@@ -466,11 +469,11 @@ int fs_open(const char *pathname)
 	struct dentry *dent;
 
 	if ((fd = get_open_fd()) < 0)
-		return -1;
+		return fd;	// ENOFD
 	if ((dent = lookup(pathname)) == NULL)
-		return -1;
+		return -ENOFOUND;
 	if (dent->inode->type == T_DIR)
-		return -1;
+		return -EINVTYPE;
 
 	openfiles[fd].f_dentry = dent;
 	openfiles[fd].offset = 0;
@@ -483,7 +486,7 @@ int fs_open(const char *pathname)
 int fs_close(int fd)
 {
 	if (fd < 0 || fd >= MAXOPENFILES)
-		return -1;
+		return -EINVFD;
 
 	openfiles[fd].f_dentry = NULL;
 	openfiles[fd].offset = 0;
@@ -501,9 +504,9 @@ int fs_unlink(const char *pathname)
 	struct inode *parentdir = sb->rootdir.inode;
 	struct dentry *dent = lookup(pathname);
 	if (!dent)
-		return -1;
+		return -ENOFOUND;
 	if (dent->inode->type == T_DIR)
-		return -1;
+		return -EINVTYPE;
 	free_dent(dent);
 	return 0;
 }
@@ -516,14 +519,14 @@ int fs_link(const char *oldpath, const char *newpath)
 {
 	struct dentry *olddent = lookup(oldpath);
 	if (!olddent)
-		return -1;
+		return -ENOFOUND;
 	struct inode *inode = olddent->inode;
 	if (inode->type == T_DIR)
-		return -1;
+		return -EINVTYPE;
 
 	// make sure newpath doesn't already exist
 	if (lookup(newpath))
-		return -1;
+		return -EEXISTS;
 
 	return new_dentry(sb->rootdir.inode, inode, newpath);
 }
@@ -554,9 +557,9 @@ int fs_mkdir(const char *pathname)
 	struct inode *dir;
 
 	if (dir_lookup(pathname, &dir))
-		return -1;
+		return -EEXISTS;
 	if (!dir)
-		return -1;
+		return -ENOFOUND;
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(pathname, filename);
@@ -592,7 +595,7 @@ static int dir_isempty(struct inode *dir)
 	for (int i = 0; i < NADDR; i++) {
 		if (dir->data[i]) {
 			if (!dir_block_isempty(dir->data[i]))
-				return -1;
+				return -ENOTEMPTY;
 		}
 	}
 	return 0;
@@ -603,18 +606,19 @@ static int dir_isempty(struct inode *dir)
  */
 int fs_rmdir(const char *pathname)
 {
-	struct inode *parent = sb->rootdir.inode;
-	struct dentry *dent = lookup(pathname);
+	struct inode *parent;
+	struct dentry *dent = dir_lookup(pathname, &parent);
+	if (!dent || !parent)
+		return -ENOFOUND;
 	if (dent->inode->type != T_DIR)
-		return -1;
+		return -EINVTYPE;
 	if (!dir_isempty(dent->inode))
-		return -1;
+		return -ENOTEMPTY;
 
 	free_dent(dent);
 	parent->nlink--;
 	return 0;
 }
-
 
 /*
  * Allocates space for file system in memory.
@@ -664,7 +668,6 @@ static void dump_fs(void)
  */
 int fs_unmount(void)
 {
-	dump_fs();
 	munmap(fs, sb->size * BSIZE);
 	return 0;
 }
@@ -689,10 +692,15 @@ int db_mkdir_at_root(const char *name)
 
 void test(void)
 {
-	fs_mkdir("/usr");
-	fs_mkdir("/usr/local");
-	fs_mkdir("/usr/local/src");
-	ls("/");
-	ls("/usr");
-	ls("/usr/local/src/");
+	int ret;
+	if ((ret = fs_mkdir("/usr")) < 0)
+		fs_pstrerror(ret, "mkdir");
+	if ((ret = fs_mkdir("/usr/local")) < 0)
+		fs_pstrerror(ret, "mkdir");
+	if ((ret = fs_mkdir("/usr/local/src")) < 0)
+		fs_pstrerror(ret, "mkdir");
+	if ((ret = fs_rmdir("/usr/local")) < 0)
+		fs_pstrerror(ret, "rmdir /usr/local");
+
+	// dump_fs();
 }
