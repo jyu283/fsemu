@@ -26,10 +26,11 @@ static inline void print_dirents(uint32_t block_num)
 	struct dentry *dents = (struct dentry *)BLKADDR(block_num);
 	for (int i = 0; i < DENTPERBLK; i++) {
 		if (dents[i].inode) {
-			printf("%s %-16s %-6d [%p] [%d]\n", 
+			printf("%s %-3d %-16s %-6d inode=%p [%p]\n", 
 				type_names[dents[i].inode->type],
+				dents[i].inode->nlink,
 				dents[i].name, dents[i].inode->size,
-				dents[i].inode, dents[i].inode->nlink);
+				dents[i].inode, &dents[i]);
 		}
 	}
 }
@@ -50,10 +51,11 @@ static void ls_dir(struct dentry *dent)
 	}
 }
 
-int ls(void)
+int ls(const char *pathname)
 {
+	struct dentry *src = lookup(pathname);
 	// For now only prints out the root's contents
-	ls_dir(&sb->rootdir);
+	ls_dir(src);
 	puts("");
 	return 0;
 }

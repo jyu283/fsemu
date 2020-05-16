@@ -4,7 +4,7 @@
 #include "fsemu.h"
 
 // Pseudo-user programs
-int ls(void);
+int ls(const char *pathname);
 void lsfd(void);
 
 #endif  // __UTIL_H__
