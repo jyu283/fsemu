@@ -51,4 +51,7 @@ struct superblock {
 extern char *fs;
 extern struct superblock *sb;
 
+struct dentry *lookup(const char *pathname);
+struct dentry *dir_lookup(const char *pathname, struct inode **pi);
+
 #endif  // __FS_H__

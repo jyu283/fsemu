@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "fs_syscall.h"
+#include "util.h"
 #include "fsemu.h"
 
 #include <sys/types.h>
@@ -288,6 +289,9 @@ static void init_fs(size_t size)
 	pr_debug("File system initialization completed!\n");
 }
 
+/**
+ * Locate a dentry in a block of dentries.
+ */
 static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 {
 	struct dentry *dents = (struct dentry *)BLKADDR(blocknum);
@@ -304,7 +308,7 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
  * Helper function for lookup() but for now it's basically all
  * lookup() does.
  */
-static struct dentry *dir_lookup(const struct inode *dir, const char *name)
+static struct dentry *lookup_dent(const struct inode *dir, const char *name)
 {
 	struct dentry *dent = NULL;
 	for (int i = 0; i < NADDR - 1; i++) {
@@ -318,16 +322,120 @@ static struct dentry *dir_lookup(const struct inode *dir, const char *name)
 }
 
 /**
- * Lookup the provided pathname.
- * Currently no support for relative pathnames.
- * For now pathname is just a file name, assumed to be in root.
+ * Get the next part (component) of the pathname separated by '/'.
+ * The component is filled into the char array provided by lookup().
  */
-static struct dentry *lookup(const char *pathname)
+static int get_path_component(const char **pathname, char *component)
 {
-	struct dentry *dent;
+	while (**pathname == '/')
+		*pathname += 1;
+
+	if (**pathname == '\0')
+		return 0;
+
+	int i = 0;
+	while (**pathname != '/' && **pathname != '\0') {
+		component[i++] = **pathname;
+		*pathname += 1;
+	}
+	component[i] = '\0';
+	return i;
+}
+
+/*
+ * Different types/usages of lookup:
+ * 
+ * 1. In determining if a file exists:
+ *     Need to go all the way to the last component of the pathname,
+ * and return the dentry of that last component, or NULL if any component
+ * along the way does not exist. 
+ * 
+ * 2. In creating a new file:
+ *     Need to check if the file already exists (1) and then also
+ * obtain a pointer to the parent directory in order to create the 
+ * new file. It is okay if the last component does not exist, but not okay
+ * if a component along the way does not exist.
+ * 
+ * Also, every component except the last should be a directory. This should
+ * also be checked during lookup.  
+ * 
+ * Conclusion: need to know when the lookup has reached the last component
+ * of the pathname, and lookup needs to somehow return the second-to-last
+ * component to the caller, preferrably in the form of an inode pointer.
+ * 
+ */
+
+/**
+ * Check if a pathname is empty except for separators.
+ */
+static int path_is_empty(const char *pathname)
+{
+	const char *c = pathname;
+	while (*c == '/')
+		c++;
+
+	// if path is empty, we should be at the end
+	return (*c == '\0');
+}
+
+/**
+ * Lookup the provided pathname. (No relative pathnames.) 
+ * Even if pathname does not start with '/', the file system
+ * will still use the root directory as a starting point.
+ */
+static struct dentry *do_lookup(const char *pathname, struct inode **pi)
+{
+	struct dentry *dent, *curr;
+	struct inode *prev;
+	char component[DENTRYNAMELEN + 1] = { '\0' };
 	
-	dent = dir_lookup(sb->rootdir.inode, pathname);
+	prev = sb->rootdir.inode;
+
+	pr_debug("lookup: pathname=%s\n", pathname);
+	while (get_path_component(&pathname, component)) {
+		pr_debug("\t%s ", component);
+		if (!(dent = lookup_dent(prev, component))) {
+			pr_debug("No entry found.\n");
+			// If lookup failed on the last component, then fill
+			// in the pi field. Otherwise, set pi field to NULL
+			// to indicate that lookup failed along the way.
+			if (!path_is_empty(pathname))
+				prev = NULL;
+			break;
+		}
+		pr_debug("\t%p\n", dent->inode);
+		if (!path_is_empty(pathname))
+			prev = dent->inode;	
+	}
+	// pr_debug("\n\n");
+	pr_debug("Lookup result: dentry=%p, pi=%p.\n", dent, prev);
+	if (pi)
+		*pi = prev;
 	return dent;
+}
+
+/**
+ * Regular lookup. Searches for the file specified by pathname
+ * and return the resulting dentry or NULL if file isn't found.
+ */
+struct dentry *lookup(const char *pathname)
+{
+	return do_lookup(pathname, NULL);
+}
+
+/**
+ * Use this lookup in system calls that involve modifying things.
+ * (e.g. mkdir, rmdir, creat, etc.) 
+ * 
+ * @param pathname The pathname to lookup
+ * @param pi lookup2() will store the inode of the parent dir. This
+ * will be NULL if anything but the last component in the path does
+ * not exist.
+ * @return The dentry to the file in question.
+ */
+struct dentry *dir_lookup(const char *pathname, struct inode **pi)
+{
+	return do_lookup(pathname, pi);
 }
 
 /**
@@ -416,14 +524,39 @@ int fs_link(const char *oldpath, const char *newpath)
 }
 
 /**
+ * Get the name of the file from the full path name.
+ */
+static void get_filename(const char *pathname, char *name)
+{
+	int start, end, len;
+	
+	end = strlen(pathname) - 1;
+	while (pathname[end] == '/')
+		end--;
+	start = end;
+	while (pathname[start - 1] != '/')
+		start--;
+	len = end - start + 1;
+	strncpy(name, &pathname[start], len);
+	name[len] = '\0';
+}
+
+/**
  * Basic version of the POSIX mkdir() system call.
  */
 int fs_mkdir(const char *pathname)
 {
-	if (lookup(pathname))
+	struct inode *dir;
+
+	if (dir_lookup(pathname, &dir))
+		return -1;
+	if (!dir)
 		return -1;
 
-	return do_creat(sb->rootdir.inode, pathname, T_DIR);
+	char filename[DENTRYNAMELEN + 1];
+	get_filename(pathname, filename);
+
+	return do_creat(dir, filename, T_DIR);
 }
 
 /**
@@ -547,4 +680,12 @@ int db_creat_at_root(const char *name, uint8_t type)
 int db_mkdir_at_root(const char *name)
 {
 	return do_creat(sb->rootdir.inode, name, T_DIR);
+}
+
+void test(void)
+{
+	fs_mkdir("/usr");
+	fs_mkdir("/usr/local");
+	fs_mkdir("/usr/local/src");
+	ls("/usr");
 }
