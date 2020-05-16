@@ -53,7 +53,14 @@ static void ls_dir(struct dentry *dent)
 
 int ls(const char *pathname)
 {
-	struct dentry *src = lookup(pathname);
+	struct dentry *src;
+	if (strcmp(pathname, "/") == 0) {
+		src = &sb->rootdir;
+	} else {
+		if (!(src = lookup(pathname)))
+			return -1;
+	}
+
 	// For now only prints out the root's contents
 	ls_dir(src);
 	puts("");
