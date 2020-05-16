@@ -1,3 +1,11 @@
+/**
+ * fsemu/src/ls.c
+ * 
+ * A basic ls program. Except it isn't really a "program" in the sense
+ * of a binary executable. They are really just functions that are a
+ * simulacrum of their real-life Linux counterparts. 
+ */
+
 #include "fsemu.h"
 #include "fs.h"
 #include "util.h"

@@ -1,7 +1,15 @@
+/**
+ * fsemu/include/fsemu.h
+ * 
+ * Things relevant to the emulator itself. Strictly "user space".
+ * For now the fsemu itself is also a "process" so open file 
+ * descriptors can also be found here.
+ */
+
 #ifndef __FSEMU_H__
 #define __FSEMU_H__
 
-#include <file.h>
+#include "file.h"
 
 #include <stdio.h>
 

@@ -1,4 +1,6 @@
-/*
+/**
+ * fsemu/src/fsemu.c
+ * 
  * FSEMU: A user space File System EMUlator
  * 
  * This emulator is used to explore the cache performance of different

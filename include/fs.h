@@ -1,3 +1,13 @@
+/**
+ * fsemu/include/fs.h
+ * 
+ * Defines the parameters and structures of the file system.
+ * For now this remains a very basic file system, no more
+ * complicated than the one found in the xv6 kernel. 
+ * Future updates will slowly transform it (hopefully) into
+ * a much more sophisticated file system.
+ */
+
 #ifndef __FS_H__
 #define __FS_H__
 

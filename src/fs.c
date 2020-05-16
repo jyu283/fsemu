@@ -1,3 +1,10 @@
+/**
+ * fsemu/src/fs.c
+ * 
+ * The core of the file system. For now this is where all the 
+ * file system-related system calls are defined.
+ */
+
 #include "fs.h"
 #include "fs_syscall.h"
 #include "util.h"
@@ -424,9 +431,9 @@ struct dentry *lookup(const char *pathname)
  * (e.g. mkdir, rmdir, creat, etc.) 
  * 
  * @param pathname The pathname to lookup
- * @param pi lookup2() will store the inode of the parent dir. This
- * will be NULL if anything but the last component in the path does
- * not exist.
+ * @param pi dir_lookup() will store the inode of the parent dir. 
+ * This will be NULL if anything but the last component in the path 
+ * does not exist.
  * @return The dentry to the file in question.
  */
 struct dentry *dir_lookup(const char *pathname, struct inode **pi)

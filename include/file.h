@@ -1,3 +1,9 @@
+/**
+ * fsemu/include/file.h
+ * 
+ * Defines the "file" construct, file descriptors etc.
+ */
+
 #ifndef __FILE_H__
 #define __FILE_H__
 
