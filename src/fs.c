@@ -342,6 +342,19 @@ static int get_path_component(const char **pathname, char *component)
 	return i;
 }
 
+/**
+ * Check if a pathname is empty except for separators.
+ */
+static int path_is_empty(const char *pathname)
+{
+	const char *c = pathname;
+	while (*c == '/')
+		c++;
+
+	// if path is empty, we should be at the end
+	return (*c == '\0');
+}
+
 /*
  * Different types/usages of lookup:
  * 
@@ -366,19 +379,6 @@ static int get_path_component(const char **pathname, char *component)
  */
 
 /**
- * Check if a pathname is empty except for separators.
- */
-static int path_is_empty(const char *pathname)
-{
-	const char *c = pathname;
-	while (*c == '/')
-		c++;
-
-	// if path is empty, we should be at the end
-	return (*c == '\0');
-}
-
-/**
  * Lookup the provided pathname. (No relative pathnames.) 
  * Even if pathname does not start with '/', the file system
  * will still use the root directory as a starting point.
@@ -391,11 +391,9 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 	
 	prev = sb->rootdir.inode;
 
-	pr_debug("lookup: pathname=%s\n", pathname);
+	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
-		pr_debug("\t%s ", component);
 		if (!(dent = lookup_dent(prev, component))) {
-			pr_debug("No entry found.\n");
 			// If lookup failed on the last component, then fill
 			// in the pi field. Otherwise, set pi field to NULL
 			// to indicate that lookup failed along the way.
@@ -403,12 +401,10 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 				prev = NULL;
 			break;
 		}
-		pr_debug("\t%p\n", dent->inode);
 		if (!path_is_empty(pathname))
 			prev = dent->inode;	
 	}
 	// pr_debug("\n\n");
-	pr_debug("Lookup result: dentry=%p, pi=%p.\n", dent, prev);
 	if (pi)
 		*pi = prev;
 	return dent;
@@ -465,6 +461,8 @@ int fs_open(const char *pathname)
 	if ((fd = get_open_fd()) < 0)
 		return -1;
 	if ((dent = lookup(pathname)) == NULL)
+		return -1;
+	if (dent->inode->type == T_DIR)
 		return -1;
 
 	openfiles[fd].f_dentry = dent;
@@ -687,5 +685,7 @@ void test(void)
 	fs_mkdir("/usr");
 	fs_mkdir("/usr/local");
 	fs_mkdir("/usr/local/src");
+	ls("/");
 	ls("/usr");
+	ls("/usr/local/src/");
 }
