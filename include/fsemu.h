@@ -33,4 +33,7 @@
 
 extern struct file openfiles[MAXOPENFILES];
 
+// Interactive shell (fsemu/src/sh.c)
+void sh(void);
+
 #endif  // __FSEMU_H__

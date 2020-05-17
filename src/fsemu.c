@@ -32,18 +32,6 @@ static void process(FILE *fp)
 }
 
 /*
- * Prints out a pretentious preamble.
- */ 
-static inline void print_title(void)
-{
-	puts("FSEMU (File System EMUlator) 0.01-05.11.20");
-	puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
-	puts("License GPLv3+: GNU GPL version 3 or later");
-	puts("Type \"help\" for help. Type \"quit\" to quit.");
-	puts("");
-}
-
-/*
  * Prints out help message.
  * Update this function as functionalities grow.
  */
@@ -60,8 +48,6 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	print_title();
-
 	fs_size = MAXFSSIZE;
 
 	if (fs_mount(fs_size) < 0) {
@@ -73,6 +59,7 @@ int main(int argc, char *argv[])
 	// process(stdin);
 
 	test();
+	sh();
 	
 	fs_unmount();
 	return 0;
