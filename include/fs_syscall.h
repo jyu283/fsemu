@@ -29,6 +29,7 @@ int fs_unlink(const char *pathname);
 int fs_link(const char *oldpath, const char *newpath);
 int fs_mkdir(const char *pathname);
 int fs_rmdir(const char *pathname);
+int fs_creat(const char *pathname);
 
 // Debug functions
 // If around declarations because these functions should

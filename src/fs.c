@@ -365,6 +365,25 @@ static int path_is_empty(const char *pathname)
 	return (*c == '\0');
 }
 
+/**
+ * Get the name of the file from the full path name.
+ */
+static void get_filename(const char *pathname, char *name)
+{
+	int start, end, len;
+	
+	end = strlen(pathname) - 1;
+	while (pathname[end] == '/')
+		end--;
+	start = end;
+	while (pathname[start - 1] != '/')
+		start--;
+	len = end - start + 1;
+	strncpy(name, &pathname[start], len);
+	name[len] = '\0';
+}
+
+
 /*
  * Different types/usages of lookup:
  * 
@@ -459,6 +478,29 @@ static int get_open_fd(void)
 }
 
 /**
+ * Basic version of the POSIX creat system call.
+ * Currently no support for flags/modes.
+ * 
+ * For onw creates a T_REG file by default.
+ */
+int fs_creat(const char *pathname)
+{
+	int fd;
+	struct dentry *dent;
+	struct inode *dir;
+
+	if ((dent = dir_lookup(pathname, &dir)))
+		return -EEXISTS;
+	if (!dir)
+		return -ENOFOUND;
+
+	char filename[DENTRYNAMELEN + 1];
+	get_filename(pathname, filename);
+
+	return do_creat(dir, filename, T_REG);
+}
+
+/**
  * Basic version of the POSIX open system call.
  * Currently no support for flags/modes as there are no
  * processes yet.
@@ -501,9 +543,9 @@ int fs_close(int fd)
  */
 int fs_unlink(const char *pathname)
 {
-	struct inode *parentdir = sb->rootdir.inode;
-	struct dentry *dent = lookup(pathname);
-	if (!dent)
+	struct inode *dir;
+	struct dentry *dent;
+	if (!(dent = dir_lookup(pathname, &dir)) || !dir)
 		return -ENOFOUND;
 	if (dent->inode->type == T_DIR)
 		return -EINVTYPE;
@@ -525,28 +567,15 @@ int fs_link(const char *oldpath, const char *newpath)
 		return -EINVTYPE;
 
 	// make sure newpath doesn't already exist
-	if (lookup(newpath))
+	struct inode *dir;
+	if (dir_lookup(newpath, &dir))
 		return -EEXISTS;
+	if (!dir)
+		return -ENOFOUND;
 
-	return new_dentry(sb->rootdir.inode, inode, newpath);
-}
-
-/**
- * Get the name of the file from the full path name.
- */
-static void get_filename(const char *pathname, char *name)
-{
-	int start, end, len;
-	
-	end = strlen(pathname) - 1;
-	while (pathname[end] == '/')
-		end--;
-	start = end;
-	while (pathname[start - 1] != '/')
-		start--;
-	len = end - start + 1;
-	strncpy(name, &pathname[start], len);
-	name[len] = '\0';
+	char filename[DENTRYNAMELEN + 1];
+	get_filename(newpath, filename);
+	return new_dentry(dir, inode, filename);
 }
 
 /**
@@ -694,13 +723,23 @@ void test(void)
 {
 	int ret;
 	if ((ret = fs_mkdir("/usr")) < 0)
-		fs_pstrerror(ret, "mkdir");
-	if ((ret = fs_mkdir("/usr/local")) < 0)
-		fs_pstrerror(ret, "mkdir");
-	if ((ret = fs_mkdir("/usr/local/src")) < 0)
-		fs_pstrerror(ret, "mkdir");
+		fs_pstrerror(ret, "mkdir /usr");
+	if ((ret = fs_creat("/test1")) < 0)
+		fs_pstrerror(ret, "creat test1");
+	if ((ret = fs_creat("/usr/test2")) < 0)
+		fs_pstrerror(ret, "creat /usrtest2");
+	if ((ret = fs_creat("/usr/test3")) < 0)
+		fs_pstrerror(ret, "creat /usr/test3");
 	if ((ret = fs_rmdir("/usr/local")) < 0)
 		fs_pstrerror(ret, "rmdir /usr/local");
+	if ((ret = fs_rmdir("/usr")) < 0)
+		fs_pstrerror(ret, "rmdir /usr");
+	if ((ret = fs_rmdir("/usr/test2")) < 0)
+		fs_pstrerror(ret, "rmdir /usr/test2");
+	if ((ret = fs_link("/usr/test3", "/link_test3")) < 0)
+		fs_pstrerror(ret, "link /usr/test3 /link_test3");
 
+	ls("/");
+	ls("/usr");
 	// dump_fs();
 }
