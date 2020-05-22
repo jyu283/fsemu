@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 
-typedef uint64_t	foff_t;     // R/W offset value
+typedef unsigned int	foff_t;     // R/W offset value
 
 /**
  * The file structure represents an open file. In real Linux, 
