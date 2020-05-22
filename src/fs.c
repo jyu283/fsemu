@@ -596,11 +596,12 @@ unsigned int do_read(struct inode *file, unsigned int off,
 		if (!(start = get_off_addr(file, off)))
 			goto out;
 
-		// copy what's left in the block/file into buf
-		size = BSIZE - off % BSIZE;
-		if (file->size < off + size) {
-			size = file->size - off;
-		}
+		// determine what the copy size should be
+		size = BSIZE - off % BSIZE;  // rest of the block.
+		if (file->size < off + size)
+			size = file->size - off;  // rest of the file.
+		if (nread + size > n)
+			size = n - nread;  // rest of requested bytes.
 		pr_debug("do_read: reading %d bytes.\n", size);
 		memcpy(buf + nread, start, size);
 		n -= size;
@@ -865,7 +866,25 @@ void test(void)
 	lsfd();
 
 	char buf[BSIZE];
-	ret = fs_read(fd, buf, (unsigned int)BSIZE);
+	ret = fs_read(fd, buf, 12);
+	if (ret < 0) {
+		fs_pstrerror(ret, "read");
+		return;
+	}
+	printf("buf: %s ret=%d\n", buf, ret);
+	ret = fs_read(fd, buf, 12);
+	if (ret < 0) {
+		fs_pstrerror(ret, "read");
+		return;
+	}
+	printf("buf: %s ret=%d\n", buf, ret);
+	ret = fs_read(fd, buf, 12);
+	if (ret < 0) {
+		fs_pstrerror(ret, "read");
+		return;
+	}
+	printf("buf: %s ret=%d\n", buf, ret);
+	ret = fs_read(fd, buf, 12);
 	if (ret < 0) {
 		fs_pstrerror(ret, "read");
 		return;
