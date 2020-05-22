@@ -577,8 +577,16 @@ static char *get_off_addr(struct inode *file, unsigned int off)
 
 /**
  * Read from a file.
+ * 
+ * @param file	The file's inode
+ * @param off	The starting offset
+ * @param buf	Buffer wherein bytes read are stored
+ * @param n		Number of bytes requested
+ * @return		The number of bytes read
+ * 
  */
-int do_read(struct inode *file, unsigned int off, void *buf, unsigned int n)
+unsigned int do_read(struct inode *file, unsigned int off, 
+					 void *buf, unsigned int n)
 {
 	int nread = 0;
 	int size;	// size of each copy
@@ -606,6 +614,11 @@ out:
 
 /**
  * Basic version of the POSIX read system call.
+ * 
+ * @param fd	File descriptor to read from
+ * @param buf	Buffer wherein bytes read are stored
+ * @param count	Number of bytes requested
+ * @return		Number of bytes actually read
  */
 unsigned int fs_read(int fd, void *buf, unsigned int count)
 {
@@ -844,7 +857,7 @@ void test(void)
 	test3->size += strlen(text) + 1;
 	strcpy(dst, text);
 
-	int fd = fs_open("/usr/test3");
+	int fd = fs_open("/link_test3");
 	if (fd < 0) {
 		fs_pstrerror(fd, "open");
 		return;
