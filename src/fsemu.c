@@ -24,14 +24,6 @@ static size_t fs_size;	// size of file system.
 struct file openfiles[MAXOPENFILES];
 
 /*
- * Processes instructions either from stdin or from a batch file.
- */
-static void process(FILE *fp)
-{
-
-}
-
-/*
  * Prints out help message.
  * Update this function as functionalities grow.
  */
