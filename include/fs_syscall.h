@@ -30,6 +30,9 @@ int fs_link(const char *oldpath, const char *newpath);
 int fs_mkdir(const char *pathname);
 int fs_rmdir(const char *pathname);
 int fs_creat(const char *pathname);
+unsigned int fs_lseek(int fd, unsigned int off);
+unsigned int fs_read(int fd, void *buf, unsigned int count);
+unsigned int fs_write(int fd, void *buf, unsigned int count);
 
 // Debug functions
 // If around declarations because these functions should
