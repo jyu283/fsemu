@@ -531,6 +531,7 @@ static int fd_inuse(int fd)
 		return -1;
 	if (!openfiles[fd].f_dentry)
 		return -1;
+	return 1;
 }
 
 /**
@@ -550,7 +551,7 @@ int fs_close(int fd)
  * Basic version of the POSIX lseek system call.
  * Future versions will implement whence. (see LSEEK(2))
  */
-int fs_lseek(int fd, unsigned int off)
+unsigned int fs_lseek(int fd, unsigned int off)
 {
 	if (!fd_inuse(fd))
 		return -EINVFD;
@@ -564,10 +565,14 @@ int fs_lseek(int fd, unsigned int off)
 /**
  * Get the actual address for the offset in the given file.
  */
-char *get_off_addr(struct inode *file, unsigned int off)
+static char *get_off_addr(struct inode *file, unsigned int off)
 {
-
-	return NULL;
+	char *addr = NULL;
+	int b = off / BSIZE;
+	if (file->data[b]) {
+		addr = BLKADDR(file->data[b]) + off % BSIZE;
+	}
+	return addr;
 }
 
 /**
@@ -576,11 +581,23 @@ char *get_off_addr(struct inode *file, unsigned int off)
 int do_read(struct inode *file, unsigned int off, void *buf, unsigned int n)
 {
 	int nread = 0;
-
+	int size;	// size of each copy
 	char *start;
-	while (n > 0) {
+
+	while (n > 0 && off < file->size) {
 		if (!(start = get_off_addr(file, off)))
 			goto out;
+
+		// copy what's left in the block/file into buf
+		size = BSIZE - off % BSIZE;
+		if (file->size < off + size) {
+			size = file->size - off;
+		}
+		pr_debug("do_read: reading %d bytes.\n", size);
+		memcpy(buf + nread, start, size);
+		n -= size;
+		nread += size;
+		off += size;
 	}
 
 out:
@@ -590,7 +607,7 @@ out:
 /**
  * Basic version of the POSIX read system call.
  */
-int fs_read(int fd, void *buf, unsigned int count)
+unsigned int fs_read(int fd, void *buf, unsigned int count)
 {
 	if (!fd_inuse(fd))
 		return -EINVFD;
@@ -818,5 +835,30 @@ void test(void)
 
 	ls("/");
 	ls("/usr");
+
+	char *text = "This is a test file. Path: /usr/test3.";
+
+	struct inode *test3 = lookup("/usr/test3")->inode;
+	test3->data[0] = alloc_data_block();
+	char *dst = BLKADDR(test3->data[0]);
+	test3->size += strlen(text) + 1;
+	strcpy(dst, text);
+
+	int fd = fs_open("/usr/test3");
+	if (fd < 0) {
+		fs_pstrerror(fd, "open");
+		return;
+	}
+	lsfd();
+
+	char buf[BSIZE];
+	ret = fs_read(fd, buf, (unsigned int)BSIZE);
+	if (ret < 0) {
+		fs_pstrerror(ret, "read");
+		return;
+	}
+	printf("buf: %s ret=%d\n", buf, ret);
+	lsfd();
 	// dump_fs();
+	printf("==========>>>>> END DEBUG <<<<<==========\n\n");
 }
