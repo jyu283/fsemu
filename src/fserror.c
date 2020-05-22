@@ -21,7 +21,8 @@ static const char *errors[] = {
 	[EINVNAME]	"Invalid name",
 	[ENOFD]		"No available file descriptor",
 	[EINVFD]	"Invalid file descriptor",
-	[ENOTEMPTY]	"Directory is not empty"
+	[ENOTEMPTY]	"Directory is not empty",
+	[EINVFD]	"Invalid parameter"
 };
 
 /**
