@@ -523,16 +523,93 @@ int fs_open(const char *pathname)
 }
 
 /**
+ * Check if a give file descriptor is actually in use.
+ */
+static int fd_inuse(int fd)
+{
+	if (fd < 0 || fd >= MAXOPENFILES)
+		return -1;
+	if (!openfiles[fd].f_dentry)
+		return -1;
+}
+
+/**
  * Basic version of the POSIX close system call.
  */
 int fs_close(int fd)
 {
-	if (fd < 0 || fd >= MAXOPENFILES)
+	if (!fd_inuse(fd))
 		return -EINVFD;
 
 	openfiles[fd].f_dentry = NULL;
 	openfiles[fd].offset = 0;
 	return 0;
+}
+
+/**
+ * Basic version of the POSIX lseek system call.
+ * Future versions will implement whence. (see LSEEK(2))
+ */
+int fs_lseek(int fd, unsigned int off)
+{
+	if (!fd_inuse(fd))
+		return -EINVFD;
+	if (off < 0 || off > openfiles[fd].f_dentry->inode->size)
+		return -EINVAL;
+
+	openfiles[fd].offset = off;
+	return off;
+}
+
+/**
+ * Get the actual address for the offset in the given file.
+ */
+char *get_off_addr(struct inode *file, unsigned int off)
+{
+
+	return NULL;
+}
+
+/**
+ * Read from a file.
+ */
+int do_read(struct inode *file, unsigned int off, void *buf, unsigned int n)
+{
+	int nread = 0;
+
+	char *start;
+	while (n > 0) {
+		if (!(start = get_off_addr(file, off)))
+			goto out;
+	}
+
+out:
+	return nread;
+}
+
+/**
+ * Basic version of the POSIX read system call.
+ */
+int fs_read(int fd, void *buf, unsigned int count)
+{
+	if (!fd_inuse(fd))
+		return -EINVFD;
+	if (!buf)
+		return -1;	
+
+	struct inode *file = openfiles[fd].f_dentry->inode;
+	if (file->type != T_REG)
+		return -EINVTYPE;
+
+	int ret;
+	unsigned int off = openfiles[fd].offset;
+	ret = do_read(file, off, buf, count);
+	if (ret < 0)
+		goto bad_read;
+	openfiles[fd].offset += ret;
+
+bad_read:
+	return ret;
 }
 
 /**
