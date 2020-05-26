@@ -13,5 +13,6 @@
 // Pseudo-user programs
 int ls(const char *pathname);
 void lsfd(void);
+int cat(const char *pathname);
 
 #endif  // __UTIL_H__

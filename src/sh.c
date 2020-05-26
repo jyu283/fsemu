@@ -37,6 +37,7 @@ static inline void print_title(void)
  */
 static inline void print_prompt(void)
 {
+	fflush(stdout);
 	write(STDOUT_FILENO, prompt, PROMPTLEN);
 }
 
@@ -70,6 +71,24 @@ static int lookup_func(char *name)
 }
 
 /**
+ * Handles cat command.
+ */
+static void cat_handler(int argc, char *argv[])
+{
+	if (argc == 1) {
+		printf("Usage: cat file\n");
+		return;
+	}
+
+	int ret;
+	for (int i = 1; i < argc; i++) {
+		if ((ret = cat(argv[i])) < 0) {
+			fs_pstrerror(ret, "cat");
+		}
+	}
+}
+
+/**
  * Handle ls command, as the function name very concisely and
  * precisely conveys.
  */
@@ -80,7 +99,7 @@ static void ls_handler(int argc, char *argv[])
 	} else {
 		for (int i = 1; i < argc; i++) {
 			if (ls(argv[i]) < 0) {
-				fs_pstrerror(ENOFOUND, argv[i]);
+				fs_pstrerror(ENOFOUND, "ls");
 			}
 		}
 	}
@@ -94,6 +113,9 @@ static int process_args(int argc, char *argv[])
 	// Handle "user programs" such as ls
 	if (strcmp(argv[0], "ls") == 0) {
 		ls_handler(argc, argv);
+		return 0;
+	} else if (strcmp(argv[0], "cat") == 0) {
+		cat_handler(argc, argv);
 		return 0;
 	}
 
