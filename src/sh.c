@@ -17,6 +17,7 @@
 
 #define MAXARGS		16	// probably won't ever need this many
 #define PROMPTLEN	strlen(prompt)
+#define SYSCALL(x)	if(strcmp(name, #x)) return SYS_ ## x
 
 static const char *prompt = "(fsemu) ";
 
@@ -43,30 +44,24 @@ static inline void print_prompt(void)
 
 /**
  * Return a function ID for the function named in the string.
+ * 
+ * WARNING: DO *NOT* change the parameter name ("name"),
+ * the SYSCALL(x) macro depends on it! And vice versa do not
+ * change the macro.
  */
 static int lookup_func(char *name)
 {
-	if (strcmp(name, "open") == 0)
-		return SYS_open; 
-	if (strcmp(name, "close") == 0)
-		return SYS_close; 
-	if (strcmp(name, "unlink") == 0)
-		return SYS_unlink; 
-	if (strcmp(name, "link") == 0)
-		return SYS_link; 
-	if (strcmp(name, "mkdir") == 0)
-		return SYS_mkdir; 
-	if (strcmp(name, "rmdir") == 0)
-		return SYS_rmdir; 
-	if (strcmp(name, "creat") == 0)
-		return SYS_creat; 
-	if (strcmp(name, "lseek") == 0)
-		return SYS_lseek; 
-	if (strcmp(name, "read") == 0)
-		return SYS_read; 
-	if (strcmp(name, "write") == 0)
-		return SYS_write; 
-	
+	SYSCALL(open);
+	SYSCALL(close);
+	SYSCALL(unlink);
+	SYSCALL(link);
+	SYSCALL(mkdir);
+	SYSCALL(rmdir);
+	SYSCALL(creat);
+	SYSCALL(lseek);
+	SYSCALL(read);
+	SYSCALL(write);
+
 	return -1;
 }
 
