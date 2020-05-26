@@ -602,7 +602,6 @@ unsigned int do_read(struct inode *file, unsigned int off,
 			size = file->size - off;  // rest of the file.
 		if (nread + size > n)
 			size = n - nread;  // rest of requested bytes.
-		pr_debug("do_read: reading %d bytes.\n", size);
 		memcpy(buf + nread, start, size);
 		n -= size;
 		nread += size;
