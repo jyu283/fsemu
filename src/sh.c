@@ -7,6 +7,7 @@
 
 #include "fsemu.h"
 #include "fs_syscall.h"
+#include "fserror.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -40,6 +41,73 @@ static inline void print_prompt(void)
 }
 
 /**
+ * Return a function ID for the function named in the string.
+ */
+static int lookup_func(char *name)
+{
+	if (strcmp(name, "open") == 0)
+		return SYS_open; 
+	if (strcmp(name, "close") == 0)
+		return SYS_close; 
+	if (strcmp(name, "unlink") == 0)
+		return SYS_unlink; 
+	if (strcmp(name, "link") == 0)
+		return SYS_link; 
+	if (strcmp(name, "mkdir") == 0)
+		return SYS_mkdir; 
+	if (strcmp(name, "rmdir") == 0)
+		return SYS_rmdir; 
+	if (strcmp(name, "creat") == 0)
+		return SYS_creat; 
+	if (strcmp(name, "lseek") == 0)
+		return SYS_lseek; 
+	if (strcmp(name, "read") == 0)
+		return SYS_read; 
+	if (strcmp(name, "write") == 0)
+		return SYS_write; 
+	
+	return -1;
+}
+
+/**
+ * Handle ls command, as the function name very concisely and
+ * precisely conveys.
+ */
+static void ls_handler(int argc, char *argv[])
+{
+	if (argc == 1) {
+		ls("/");  // This will become cwd
+	} else {
+		for (int i = 1; i < argc; i++) {
+			if (ls(argv[i]) < 0) {
+				fs_pstrerror(ENOFOUND, argv[i]);
+			}
+		}
+	}
+}
+
+/**
+ * Process a list of arguments broken down by process()
+ */
+static int process_args(int argc, char *argv[])
+{
+	// Handle "user programs" such as ls
+	if (strcmp(argv[0], "ls") == 0) {
+		ls_handler(argc, argv);
+		return 0;
+	}
+
+	// system call handling
+	int func_id = lookup_func(argv[0]);
+	if (func_id < 0) {
+		printf("Invalid command.\n");
+		return 0;
+	}
+
+	return 0;
+}
+
+/**
  * Process one line of user input.
  * 
  * Returns -1 when quit command is issued by user.
@@ -69,10 +137,7 @@ int process(char *line)
 		argv[argc++] = arg;
 	}
 
-	pr_debug("arg list (argc=%d): \n", argc);
-	for (int i = 0; i < MAXARGS; i++) {
-		pr_debug("arg #%d: %s\n", i, argv[i]);
-	}
+	process_args(argc, argv);
 
 	return 0;
 }
