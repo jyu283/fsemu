@@ -83,7 +83,7 @@ void lsfd(void)
 	printf("open file descriptors: \n");
 	for (int i = 0; i < MAXOPENFILES; i++) {
 		if (openfiles[i].f_dentry) {
-			printf(" [%d] %s (off=%lx)\n", i, openfiles[i].f_dentry->name,
+			printf(" [%d] %s (off=%d)\n", i, openfiles[i].f_dentry->name,
 											openfiles[i].offset);
 		}
 	}
