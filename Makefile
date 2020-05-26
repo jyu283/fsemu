@@ -26,7 +26,7 @@ $(BINDIR)/$(TARGET): $(OBJECTS)
 	@$(mkdir) $(BINDIR)
 	$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
 	@$(rm) $(TARGET)
-	@ln -s $(BINDIR)/$(TARGET)
+	@ln $(BINDIR)/$(TARGET)
 
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(OBJDIR)
