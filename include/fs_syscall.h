@@ -80,8 +80,6 @@ static int (*syscalls[])(void) = {
 // If around declarations because these functions should
 // only be called when debugging. 
 #ifdef DEBUG
-int db_creat_at_root(const char *name, uint8_t type);
-int db_mkdir_at_root(const char *name);
 void test(void);
 #endif
 
