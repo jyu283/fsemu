@@ -17,7 +17,7 @@
 
 #define MAXARGS		16	// probably won't ever need this many
 #define PROMPTLEN	strlen(prompt)
-#define SYSCALL(x)	if(strcmp(name, #x)) return SYS_ ## x
+#define SYSCALL(x)	if(strcmp(name, #x) == 0) return SYS_ ## x
 
 static const char *prompt = "(fsemu) ";
 
@@ -119,6 +119,8 @@ static int process_args(int argc, char *argv[])
 	if (func_id < 0) {
 		printf("Invalid command.\n");
 		return 0;
+	} else {
+		pr_debug("%s: id=%d.\n", argv[0], func_id);
 	}
 
 	return 0;
