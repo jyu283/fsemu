@@ -17,26 +17,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *fs = NULL;	// pointer to start of file system.
 static size_t fs_size;	// size of file system.
 
 /* File descriptors */
 struct file openfiles[MAXOPENFILES];
 
-/*
- * Prints out help message.
- * Update this function as functionalities grow.
- */
-static inline void print_help(void)
-{
-	puts("Usage: fsemu [input]");
-	puts("Note: file input is currently not supported.");
-}
-
 int main(int argc, char *argv[])
 {
 	if (argc != 1) {
-		print_help();
 		exit(0);
 	}
 
@@ -46,9 +34,6 @@ int main(int argc, char *argv[])
 		printf("Error: failed to mount file system.\n");
 		exit(0);
 	}
-
-	/* Interactive mode only for now. */
-	// process(stdin);
 
 	test();
 	sh();
