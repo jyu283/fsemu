@@ -13,10 +13,10 @@
 #include <stdio.h>
 
 static char *type_names[] = {
-	[T_UNUSED]  "UNUSED",
-	[T_REG]     "FILE  ",
-	[T_DIR]     "DIR   ",
-	[T_DEV]     "DEVICE"
+	[T_UNUSED]  = "UNUSED",
+	[T_REG]     = "FILE  ",
+	[T_DIR]     = "DIR   ",
+	[T_DEV]     = "DEVICE"
 };
 
 /**

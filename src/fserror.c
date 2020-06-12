@@ -13,16 +13,16 @@
 #include <stdio.h>
 
 static const char *errors[] = {
-	[0]			"No error",
-	[ENOFOUND]	"No such file or directory",
-	[EEXISTS]	"File or directory already exists",
-	[EALLOC]	"Allocation failed",
-	[EINVTYPE]	"Invalid file type",
-	[EINVNAME]	"Invalid name",
-	[ENOFD]		"No available file descriptor",
-	[EINVFD]	"Invalid file descriptor",
-	[ENOTEMPTY]	"Directory is not empty",
-	[EINVFD]	"Invalid parameter"
+	[0]			= "No error",
+	[ENOFOUND]	= "No such file or directory",
+	[EEXISTS]	= "File or directory already exists",
+	[EALLOC]	= "Allocation failed",
+	[EINVTYPE]	= "Invalid file type",
+	[EINVNAME]	= "Invalid name",
+	[ENOFD]		= "No available file descriptor",
+	[EINVFD]	= "Invalid file descriptor",
+	[ENOTEMPTY]	= "Directory is not empty",
+	[EINVFD]	= "Invalid parameter"
 };
 
 /**
