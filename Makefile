@@ -3,7 +3,7 @@ TARGET   = fsemu
 
 CC       = gcc
 # compiling flags here
-CFLAGS   = -Wall -Werror -g -O0 -I./include \
+CFLAGS   = -Wall -g -O0 -I./include \
 		   -Wno-unused-variable -Wno-unused-function
 
 LINKER   = gcc
