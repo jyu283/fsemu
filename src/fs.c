@@ -10,6 +10,7 @@
 #include "fserror.h"
 #include "util.h"
 #include "fsemu.h"
+#include "dentry_cache.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -291,12 +292,17 @@ static void init_fd(void)
 /*
  * Master function to initialize the file system.
  */
-static void init_fs(size_t size)
+static int init_fs(size_t size)
 {
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
 	init_fd();				// create file descriptors
+	if (dentry_cache_init_all() < 0) {
+		printf("Error: failed to initialize dentry cache.\n");
+		return -1;
+	}
 	pr_debug("File system initialization completed!\n");
+	return 0;
 }
 
 /**
@@ -768,18 +774,29 @@ int fs_mount(unsigned long size)
 		printf("Error: file system size cannot be greater than 1GB.\n");
 		return -1;
 	}
-	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
+
+	fd = open("fs.img", O_RDWR | O_CREAT, 0666);
+	if (!fd) {
 		perror("open");
 		return -1;
 	}
-	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	struct stat statbuf;
+	if (fstat(fd, &statbuf) < 0) {
+		perror("stat");
+		return -1;
+	}
+	if (statbuf.st_size != size) {
+		ftruncate(fd, 0);
+		lseek(fd, size, SEEK_SET);
+		write(fd, "\0", 1);
+	}
+	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (!fs) {
 		perror("mmap");
 		return -1;
 	}
 	close(fd); 
-	init_fs(size);
-	return 0;
+	return init_fs(size);
 }
 
 /*
@@ -804,6 +821,7 @@ static void dump_fs(void)
  */
 int fs_unmount(void)
 {
+	dentry_cache_free_all();
 	munmap(fs, sb->size * BSIZE);
 	return 0;
 }
@@ -828,6 +846,10 @@ int db_mkdir_at_root(const char *name)
 
 void test(void)
 {
+	printf("BSIZE = %d. DENTPERBLK = %ld.\n", BSIZE, DENTPERBLK);
+
+	db_print_dentry_cache();
+
 	int ret;
 	if ((ret = fs_mkdir("/usr")) < 0)
 		fs_pstrerror(ret, "mkdir /usr");
