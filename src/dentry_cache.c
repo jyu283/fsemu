@@ -41,8 +41,10 @@ void db_print_dentry_cache(void)
 	while (ht) {
 		if (ht == dcache.head)
 			printf("HEAD >> ");
-		if (ht == dcache.tail)
+		else if (ht == dcache.tail)
 			printf("TAIL >> ");
+		else
+			printf("        ");
 		db_print_hashtable(ht);
 		ht = ht->next;
 	}

@@ -134,7 +134,7 @@ static int process_args(int argc, char *argv[])
 int process(char *line)
 {
 	int argc = 0;
-	char *argv[MAXARGS] = { };
+	char *argv[MAXARGS] = { NULL };
 
 	// Empty input (only '\n')
 	if (strlen(line) == 1)
