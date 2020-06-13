@@ -908,21 +908,3 @@ int fs_unmount(void)
 	munmap(fs, sb->size * BSIZE);
 	return 0;
 }
-
-/* 
- * Debug function:
- * Create a file/directory/device at root directory.
- */
-int db_creat_at_root(const char *name, uint8_t type)
-{
-	return do_creat(sb->rootdir.inode, name, type);
-}
-
-/*
- * Debug function:
- * Create a directory inode at root directory.
- */
-int db_mkdir_at_root(const char *name)
-{
-	return do_creat(sb->rootdir.inode, name, T_DIR);
-}
