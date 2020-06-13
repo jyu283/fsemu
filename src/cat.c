@@ -9,6 +9,7 @@
 #include "fs.h"
 #include "fs_syscall.h"
 #include "util.h"
+#include "fserror.h"
 #include "fsemu.h"
 
 #include <stdio.h>
@@ -26,5 +27,9 @@ int cat(const char *pathname)
 	while ((ret = fs_read(fd, buf, BUFFSZ)) > 0) {
 		printf("%s", buf);
 	}
+	if (ret < 0) 
+		fs_pstrerror(ret, "cat");
+
+	fs_close(fd);
 	return ret;
 }
