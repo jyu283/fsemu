@@ -570,13 +570,25 @@ unsigned int fs_lseek(int fd, unsigned int off)
 
 /**
  * Get the actual address for the offset in the given file.
+ * 
+ * @param file	The file inode.
+ * @param off	The desired offset
+ * @param alloc	TRUE if want block allocation if currently unused.
+ * @return		The address corresponding to offset.
  */
-static char *get_off_addr(struct inode *file, unsigned int off)
+static char *get_off_addr(struct inode *file, unsigned int off, int alloc)
 {
 	char *addr = NULL;
 	int b = off / BSIZE;
 	if (file->data[b]) {
 		addr = BLKADDR(file->data[b]) + off % BSIZE;
+	} else {
+		if (alloc) {
+			file->data[b] = alloc_data_block();
+			if (file->data[b]) {
+				addr = BLKADDR(file->data[b]) + off % BSIZE;
+			}
+		}
 	}
 	return addr;
 }
@@ -599,7 +611,7 @@ unsigned int do_read(struct inode *file, unsigned int off,
 	char *start;
 
 	while (n > 0 && off < file->size) {
-		if (!(start = get_off_addr(file, off)))
+		if (!(start = get_off_addr(file, off, 0)))
 			goto out;
 
 		// determine what the copy size should be
@@ -645,6 +657,73 @@ unsigned int fs_read(int fd, void *buf, unsigned int count)
 	openfiles[fd].offset += ret;
 
 bad_read:
+	return ret;
+}
+
+/**
+ * Write to a file.
+ * 
+ * @param file	The file's inode
+ * @param off	The starting offset
+ * @param buf	Buffer wherein bytes to be written are stored
+ * @param n		Number of bytes left to be written
+ * @return		The number of bytes written
+ */
+unsigned int do_write(struct inode *file, unsigned int *off, 
+					  void *buf, unsigned int n)
+{
+	int nwritten = 0;
+	int size;	// size of each write
+	char *start;
+
+	while (n > 0) {
+		if (!(start = get_off_addr(file, *off, 1)))
+			goto out;
+
+		// determine what the copy size should be
+		size = n;
+		if (size > BSIZE - *off % BSIZE)
+			size = BSIZE - *off % BSIZE;
+		memcpy(start, buf + nwritten, size);
+		n -= size;
+		nwritten += size;
+		*off += size;
+	}
+
+out:
+	return nwritten;
+}
+
+/**
+ * Basic version of the POSIX write system call.
+ * 
+ * @param fd	File descriptor to write to
+ * @param buf	Buffer wherein bytes to write are stored
+ * @param count	Number of bytes requested
+ * @return		Number of bytes actually written
+ */
+unsigned int fs_write(int fd, void *buf, unsigned int count)
+{
+	if (!fd_inuse(fd))
+		return -EINVFD;
+	if (!buf)
+		return -1;	
+
+	struct inode *file = openfiles[fd].f_dentry->inode;
+	if (file->type != T_REG)
+		return -EINVTYPE;
+
+	int ret;
+	unsigned int off = openfiles[fd].offset;
+	ret = do_write(file, &off, buf, count);
+	
+	pr_debug("write: %d bytes written.\n", ret);
+
+	if (ret) {
+		openfiles[fd].offset = off;
+		if (off > file->size)
+			file->size = off;
+	}
 	return ret;
 }
 
@@ -775,22 +854,26 @@ int fs_mount(unsigned long size)
 		return -1;
 	}
 
-	fd = open("fs.img", O_RDWR | O_CREAT, 0666);
-	if (!fd) {
+	// fd = open("fs.img", O_RDWR | O_CREAT, 0666);
+	// if (!fd) {
+	// 	perror("open");
+	// 	return -1;
+	// }
+	// struct stat statbuf;
+	// if (fstat(fd, &statbuf) < 0) {
+	// 	perror("stat");
+	// 	return -1;
+	// }
+	// if (statbuf.st_size != size) {
+	// 	ftruncate(fd, 0);
+	// 	lseek(fd, size, SEEK_SET);
+	// 	write(fd, "\0", 1);
+	// }
+	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
 		perror("open");
 		return -1;
 	}
-	struct stat statbuf;
-	if (fstat(fd, &statbuf) < 0) {
-		perror("stat");
-		return -1;
-	}
-	if (statbuf.st_size != size) {
-		ftruncate(fd, 0);
-		lseek(fd, size, SEEK_SET);
-		write(fd, "\0", 1);
-	}
-	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (!fs) {
 		perror("mmap");
 		return -1;
