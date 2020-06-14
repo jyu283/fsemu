@@ -13,7 +13,6 @@ LFLAGS   = -Wall -I./include -lm
 # change these to proper directories where each file should be
 SRCDIR   = src
 OBJDIR   = obj
-BINDIR   = bin
 
 SOURCES  := $(wildcard $(SRCDIR)/*.c)
 INCLUDES := $(wildcard $(SRCDIR)/*.h)
@@ -22,11 +21,8 @@ rm       = rm -f
 mkdir    = mkdir -p
 
 
-$(BINDIR)/$(TARGET): $(OBJECTS)
-	@$(mkdir) $(BINDIR)
+$(TARGET): $(OBJECTS)
 	$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
-	@$(rm) $(TARGET)
-	@ln $(BINDIR)/$(TARGET)
 
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(OBJDIR)
@@ -35,9 +31,8 @@ $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 .PHONY: clean
 clean:
 	$(rm) $(OBJECTS)
-	$(rm) $(BINDIR)/$(TARGET)
 	$(rm) $(TARGET)
 
 .PHONY: remove
 remove: clean
-	@$(rm) $(BINDIR)/$(TARGET)
+	@$(rm) $(TARGET)
