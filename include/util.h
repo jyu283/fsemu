@@ -15,4 +15,6 @@ int ls(const char *pathname);
 void lsfd(void);
 int cat(const char *pathname);
 
+void benchmark(char *input_file);
+
 #endif  // __UTIL_H__
