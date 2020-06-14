@@ -4,3 +4,6 @@
 **.img
 **test.c
 **.hex
+input_file.txt
+**.data
+
