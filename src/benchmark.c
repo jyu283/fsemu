@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 /**
  * Populate the file system based on the input file.
@@ -40,20 +41,21 @@ static int benchmark_init_fs(char *input_file)
 	size_t len = 0;
 	int ret;
 
-	printf("Initializing file system based on %s...\n", input_file);
+	printf("Initializing file system based on %s...", input_file);
 	if (!(fp = fopen(input_file, "r"))) {
 		perror("open");
 		return -1;
 	}
-
+	
+	clock_t begin = clock();
 	while (getline(&line, &len, fp) != -1) {
 		line[strlen(line) - 1] = '\0';  // clear trailing \n
 		pathname = line + 2;
 		if (line[0] == 'D') {
-			pr_debug("mkdir %s\n", pathname);
+			// pr_debug("mkdir %s\n", pathname);
 			ret = fs_mkdir(pathname);
 		} else if (line[0] == 'F') {
-			pr_debug("creat %s\n", pathname);
+			// pr_debug("creat %s\n", pathname);
 			ret = fs_creat(pathname);
 		} else {
 			return -1;
@@ -65,7 +67,16 @@ static int benchmark_init_fs(char *input_file)
 		}
 	}
 
+	clock_t end = clock();
+	double runtime_main = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
+	printf("...(%.3fms)\n", runtime_main);
+
 	fclose(fp);
+	return 0;
+}
+
+static int benchmark_lookup(char *input_file)
+{
 	return 0;
 }
 
