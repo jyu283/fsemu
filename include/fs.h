@@ -29,16 +29,16 @@
  * | Superblock | Inodes | Bitmap | Data |
  */
 
-#define T_UNUSED    0
-#define T_REG       1
-#define T_DIR       2
-#define T_DEV       3
-#define NADDR       16
+#define T_UNUSED	0
+#define T_REG		1
+#define T_DIR		2
+#define T_DEV		3
+#define NDIR		16
 
 struct inode {
 	uint32_t		nlink;
 	uint32_t		size;
-	uint32_t		data[NADDR];
+	uint32_t		data[NDIR];
 	uint8_t			type; 
 };
 

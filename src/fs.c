@@ -140,7 +140,7 @@ static int free_inode(struct inode *inode)
 	if (inode->nlink > 0)
 		return -1;
 
-	for (int i = 0; i < NADDR; i++) {
+	for (int i = 0; i < NDIR; i++) {
 		if (inode->data[i]) {
 			free_data_block(inode->data[i]);
 			inode->data[i] = 0;
@@ -157,7 +157,7 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 {
 	struct dentry *dents;
 	int unused = -1;	// record of first unused block
-	for (int i = 0; i < NADDR - 1; i++) {
+	for (int i = 0; i < NDIR - 1; i++) {
 		if (dir->data[i]) {
 			dents = BLKADDR(dir->data[i]);
 			for (int j = 0; j < DENTPERBLK; j++) {
@@ -340,7 +340,7 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 static struct dentry *lookup_dent(const struct inode *dir, const char *name)
 {
 	struct dentry *dent = NULL;
-	for (int i = 0; i < NADDR - 1; i++) {
+	for (int i = 0; i < NDIR - 1; i++) {
 		if (dir->data[i]) {
 			dent = find_dent_in_block(dir->data[i], name);
 			if (dent)
@@ -826,7 +826,7 @@ static int dir_block_isempty(uint32_t b)
  */
 static int dir_isempty(struct inode *dir)
 {
-	for (int i = 0; i < NADDR; i++) {
+	for (int i = 0; i < NDIR; i++) {
 		if (dir->data[i]) {
 			if (!dir_block_isempty(dir->data[i]))
 				return -ENOTEMPTY;

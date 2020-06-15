@@ -52,7 +52,7 @@ static void ls_dir(struct dentry *dent)
 	struct inode *inode = dentry_get_inode(dent);
 	if (inode->type != T_DIR)
 		return;
-	for (int i = 0; i < NADDR; i++) {
+	for (int i = 0; i < NDIR; i++) {
 		if (inode->data[i]) {
 			print_dirents(inode->data[i]);
 		}
