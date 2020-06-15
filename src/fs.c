@@ -22,6 +22,8 @@
 
 char *fs;
 struct superblock *sb;
+struct inode *inodes;
+char *bitmap;
 
 /*
  * Calculate the positions of each region of the file system.
@@ -39,23 +41,20 @@ static void init_superblock(size_t size)
 	sb->size = total_blocks;
 	pr_debug("Total blocks: %d.\n", total_blocks);
 
-	sb->inodes = (struct inode *)(fs + BSIZE);
+	sb->inodestart = 1;
 	sb->ninodes = inode_blocks * INOPERBLK; 
-	pr_debug("Allocated %d blocks for inodes at %p.\n", 
-				inode_blocks, sb->inodes);
 
-	sb->bitmap = fs + BSIZE + inode_blocks * BSIZE;
+	sb->bitmapstart = sb->inodestart + inode_blocks;
 
 	// Here, number of data blocks are overestimated for convenience
 	int bitmap_blocks = (total_blocks / 8) / BSIZE;
-	pr_debug("Allocated %d blocks for the bitmap at %p.\n", 
-				bitmap_blocks, sb->bitmap);
 
 	int nblocks = total_blocks - 1 - inode_blocks - bitmap_blocks;
 	sb->datastart = inode_blocks + bitmap_blocks;
 	sb->nblocks = nblocks;
-	pr_debug("Allocated %d data blocks starting block %lu.\n", 
-				nblocks, sb->datastart);
+
+	inodes = BLKADDR(sb->inodestart);
+	bitmap = BLKADDR(sb->bitmapstart);
 }
 
 /**
@@ -73,12 +72,11 @@ static void wipe_block(uint32_t blocknum)
 static uint32_t alloc_data_block(void)
 {
 	uint32_t block = 0;
-	char *bm = sb->bitmap;
 	for (int i = 0; i < sb->size; i++) {
-		if (bm[i] != 0xff) {
+		if (bitmap[i] != 0xff) {
 			for (int j = 0; j < 8; j++) {
-				if (((bm[i] >> j) & 1) == 0) {
-					bm[i] |= 1 << j;
+				if (((bitmap[i] >> j) & 1) == 0) {
+					bitmap[i] |= 1 << j;
 					block = sb->datastart + (i * 8 + j);
 					wipe_block(block);
 					goto out;
@@ -95,7 +93,7 @@ out:
  */
 static void free_data_block(uint32_t b)
 {
-	char *bm = sb->bitmap;
+	char *bm = BLKADDR(sb->bitmapstart);
 	int byte = b / 8;
 	int bit = b % 8;
 	bm[byte] &= ~(1 << bit);
@@ -109,8 +107,9 @@ static void free_data_block(uint32_t b)
 static struct inode *alloc_inode(uint8_t type)
 {
 	/* Inode 0 is reserved! */
-	struct inode *inode = sb->inodes + 1;
-	for (; inode < sb->inodes + sb->ninodes; inode++) {
+	struct inode *inode;
+	for (int i = 1; i < sb->ninodes; i++) {
+		inode = &inodes[i];
 		if (inode->type == T_UNUSED) {
 			inode->type = type;
 			inode->size = 0;
@@ -152,7 +151,7 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 		if (dir->data[i]) {
 			dents = BLKADDR(dir->data[i]);
 			for (int j = 0; j < DENTPERBLK; j++) {
-				if (dents[j].inode == NULL)
+				if (dents[j].inum == 0)
 					return &dents[j];
 			}
 		} else {
@@ -182,7 +181,7 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 static inline void init_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
-	dent->inode = inode;
+	dent->inum = inum(inode);
 	inode->nlink++;
 	strcpy(dent->name, name);
 }
@@ -195,9 +194,9 @@ static inline void init_dent(struct dentry *dent, struct inode *inode,
  */
 static void free_dent(struct dentry *dent)
 {
-	struct inode *inode = dent->inode;
+	struct inode *inode = dentry_get_inode(dent);
 
-	dent->inode = NULL;
+	dent->inum = 0;
 	dent->name[0] = '\0';
 
 	/* This check should be redundant. */
@@ -297,10 +296,14 @@ static int init_fs(size_t size)
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
 	init_fd();				// create file descriptors
+
+#ifdef DENTRY_CACHE
 	if (dentry_cache_init_all() < 0) {
 		printf("Error: failed to initialize dentry cache.\n");
 		return -1;
 	}
+#endif
+
 	pr_debug("File system initialization completed!\n");
 	return 0;
 }
@@ -312,7 +315,7 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 {
 	struct dentry *dents = (struct dentry *)BLKADDR(blocknum);
 	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inode && strcmp(dents[i].name, name) == 0) {
+		if (dents[i].inum && strcmp(dents[i].name, name) == 0) {
 			return &dents[i];
 		}
 	}
@@ -424,7 +427,7 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 	struct inode *prev;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
 	
-	prev = sb->rootdir.inode;
+	prev = dentry_get_inode(&sb->rootdir);
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
@@ -437,7 +440,7 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 			break;
 		}
 		if (!path_is_empty(pathname))
-			prev = dent->inode;	
+			prev = dentry_get_inode(dent);
 	}
 	// pr_debug("\n\n");
 	if (pi)
@@ -520,7 +523,7 @@ int fs_open(const char *pathname)
 		return fd;	// ENOFD
 	if ((dent = lookup(pathname)) == NULL)
 		return -ENOFOUND;
-	if (dent->inode->type == T_DIR)
+	if ((dentry_get_inode(dent))->type == T_DIR)
 		return -EINVTYPE;
 
 	openfiles[fd].f_dentry = dent;
@@ -561,7 +564,7 @@ unsigned int fs_lseek(int fd, unsigned int off)
 {
 	if (!fd_inuse(fd))
 		return -EINVFD;
-	if (off < 0 || off > openfiles[fd].f_dentry->inode->size)
+	if (off < 0 || off > dentry_get_inode(openfiles[fd].f_dentry)->size)
 		return -EINVAL;
 
 	openfiles[fd].offset = off;
@@ -645,7 +648,7 @@ unsigned int fs_read(int fd, void *buf, unsigned int count)
 	if (!buf)
 		return -1;	
 
-	struct inode *file = openfiles[fd].f_dentry->inode;
+	struct inode *file = dentry_get_inode(openfiles[fd].f_dentry);
 	if (file->type != T_REG)
 		return -EINVTYPE;
 
@@ -709,7 +712,7 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 	if (!buf)
 		return -1;	
 
-	struct inode *file = openfiles[fd].f_dentry->inode;
+	struct inode *file = dentry_get_inode(openfiles[fd].f_dentry);
 	if (file->type != T_REG)
 		return -EINVTYPE;
 
@@ -739,7 +742,7 @@ int fs_unlink(const char *pathname)
 	struct dentry *dent;
 	if (!(dent = dir_lookup(pathname, &dir)) || !dir)
 		return -ENOFOUND;
-	if (dent->inode->type == T_DIR)
+	if (dentry_get_inode(dent)->type == T_DIR)
 		return -EINVTYPE;
 	free_dent(dent);
 	return 0;
@@ -754,7 +757,7 @@ int fs_link(const char *oldpath, const char *newpath)
 	struct dentry *olddent = lookup(oldpath);
 	if (!olddent)
 		return -ENOFOUND;
-	struct inode *inode = olddent->inode;
+	struct inode *inode = dentry_get_inode(olddent);
 	if (inode->type == T_DIR)
 		return -EINVTYPE;
 
@@ -796,7 +799,7 @@ static int dir_block_isempty(uint32_t b)
 {
 	struct dentry *dents = (struct dentry *)BLKADDR(b);
 	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inode) {
+		if (dents[i].inum) {
 			if (strcmp(dents[i].name, ".") == 0)
 				continue;
 			if (strcmp(dents[i].name, "..") == 0)
@@ -831,9 +834,9 @@ int fs_rmdir(const char *pathname)
 	struct dentry *dent = dir_lookup(pathname, &parent);
 	if (!dent || !parent)
 		return -ENOFOUND;
-	if (dent->inode->type != T_DIR)
+	if (dentry_get_inode(dent)->type != T_DIR)
 		return -EINVTYPE;
-	if (!dir_isempty(dent->inode))
+	if (!dir_isempty(dentry_get_inode(dent)))
 		return -ENOTEMPTY;
 
 	free_dent(dent);
@@ -904,7 +907,9 @@ static void dump_fs(void)
  */
 int fs_unmount(void)
 {
+#ifdef DENTRY_CACHE
 	dentry_cache_free_all();
+#endif
 	munmap(fs, sb->size * BSIZE);
 	return 0;
 }

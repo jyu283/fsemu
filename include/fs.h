@@ -42,11 +42,11 @@ struct inode {
 	uint8_t			type; 
 };
 
-#define DENTRYNAMELEN   (32 - sizeof(struct inode *))
+#define DENTRYNAMELEN   (64 - sizeof(int))
 #define DENTPERBLK		(BSIZE / sizeof(struct dentry))
 
 struct dentry {
-	struct inode	*inode;
+	int				inum;
 	char			name[DENTRYNAMELEN];
 };
 
@@ -55,15 +55,28 @@ struct superblock {
 	uint64_t		ninodes;    // number of inodes
 	uint64_t		datastart;	// data start block
 	uint64_t		nblocks;    // number of data blocks
-	struct inode	*inodes;	// start of inodes
-	char			*bitmap;	// start of bitmap
+	uint64_t		inodestart;	// start of inodes
+	uint64_t		bitmapstart;	// start of bitmap
 	struct dentry	rootdir;	// root dentry
 };
 
 extern char *fs;
 extern struct superblock *sb;
+extern struct inode *inodes;
+extern char *bitmap;
 
 struct dentry *lookup(const char *pathname);
 struct dentry *dir_lookup(const char *pathname, struct inode **pi);
+
+static inline int inum(struct inode *i)
+{
+	return (i - inodes);
+}
+
+static inline struct inode *dentry_get_inode(struct dentry *dent)
+{
+	return &inodes[dent->inum];
+}
+
 
 #endif  // __FS_H__

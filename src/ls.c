@@ -32,13 +32,13 @@ static char *type_names[] = {
 static inline void print_dirents(uint32_t block_num)
 {
 	struct dentry *dents = (struct dentry *)BLKADDR(block_num);
+	struct inode *inode;
 	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inode) {
+		if (dents[i].inum) {
+			inode = dentry_get_inode(&dents[i]);
 			printf("%s %-3d %-16s %-6d inode=%p [%p]\n", 
-				type_names[dents[i].inode->type],
-				dents[i].inode->nlink,
-				dents[i].name, dents[i].inode->size,
-				dents[i].inode, &dents[i]);
+				type_names[inode->type], inode->nlink, dents[i].name, 
+				inode->size, inode, &dents[i]);
 		}
 	}
 }
@@ -49,7 +49,7 @@ static inline void print_dirents(uint32_t block_num)
 static void ls_dir(struct dentry *dent)
 {
 	printf("%s \n", dent->name);
-	struct inode *inode = dent->inode;
+	struct inode *inode = dentry_get_inode(dent);
 	if (inode->type != T_DIR)
 		return;
 	for (int i = 0; i < NADDR; i++) {
