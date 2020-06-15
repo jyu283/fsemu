@@ -18,7 +18,7 @@
 #include <stdint.h>
 
 #define MAXFSSIZE   0x40000000
-#define BSIZE       0x1000      // block size = 512 bytes
+#define BSIZE       0x1000      // block size = 4096 bytes 
 #define DENTCACHESIZE	64
 
 #define INOPERBLK   (BSIZE / sizeof(struct inode))
