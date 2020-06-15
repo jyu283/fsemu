@@ -22,18 +22,6 @@
 static const char *prompt = "(fsemu) ";
 
 /**
- * Prints out a pretentious preamble.
- */ 
-static inline void print_title(void)
-{
-	puts("FSEMU (File System EMUlator) 0.01-05.11.20");
-	puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
-	puts("License GPLv3+: GNU GPL version 3 or later");
-	puts("Type \"help\" for help. Type \"quit\" to quit.");
-	puts("");
-}
-
-/**
  * Prints prompt string to stdout.
  */
 static inline void print_prompt(void)
@@ -168,8 +156,6 @@ void sh(void)
 {
 	char *line = NULL;
 	size_t len = 0;
-
-	print_title();
 
 	print_prompt();
 	while (getline(&line, &len, stdin) != -1) {

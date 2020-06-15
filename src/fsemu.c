@@ -22,6 +22,18 @@ static size_t fs_size;	// size of file system.
 /* File descriptors */
 struct file openfiles[MAXOPENFILES];
 
+/**
+ * Prints out a pretentious preamble.
+ */ 
+static inline void print_title(void)
+{
+	puts("FSEMU (File System EMUlator) 0.01-05.11.20");
+	puts("Copyright (C) 2020 Arpaci-Dusseau Systems Lab");
+	puts("License GPLv3+: GNU GPL version 3 or later");
+	puts("Type \"help\" for help. Type \"quit\" to quit.");
+	puts("");
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc != 1) {
@@ -30,12 +42,14 @@ int main(int argc, char *argv[])
 
 	fs_size = MAXFSSIZE;
 
+	print_title();
+
 	if (fs_mount(fs_size) < 0) {
 		printf("Error: failed to mount file system.\n");
 		exit(0);
 	}
 
-	test();
+	// test();
 	sh();
 	
 	fs_unmount();
