@@ -58,6 +58,16 @@ static void init_superblock(size_t size)
 }
 
 /**
+ * Read from an existing superblock to populate the global variables.
+ */
+static inline void read_sb()
+{
+	sb = (struct superblock *)fs;
+	inodes = BLKADDR(sb->inodestart);
+	bitmap = BLKADDR(sb->bitmapstart);
+}
+
+/**
  * Zero out a data block before allocating it to an inode.
  */
 static void wipe_block(uint32_t blocknum)
@@ -849,40 +859,59 @@ int fs_rmdir(const char *pathname)
  */
 int fs_mount(unsigned long size)
 {
-	pr_debug("Allocating %lu bytes for file system...\n", size);
-
+	size_t fs_size;
+	int fs_is_new = 0;
 	int fd;
 	if (size > MAXFSSIZE) {
 		printf("Error: file system size cannot be greater than 1GB.\n");
 		return -1;
 	}
 
-	// fd = open("fs.img", O_RDWR | O_CREAT, 0666);
-	// if (!fd) {
-	// 	perror("open");
-	// 	return -1;
-	// }
-	// struct stat statbuf;
-	// if (fstat(fd, &statbuf) < 0) {
-	// 	perror("stat");
-	// 	return -1;
-	// }
-	// if (statbuf.st_size != size) {
-	// 	ftruncate(fd, 0);
-	// 	lseek(fd, size, SEEK_SET);
-	// 	write(fd, "\0", 1);
-	// }
-	if ((fd = open("/dev/zero", O_RDWR)) < 0) {
+	if (access("fs.img", F_OK) != -1) {
+		fd = open("fs.img", O_RDWR);
+	} else {
+		fd = open("fs.img", O_RDWR | O_CREAT, 0666);
+		fs_is_new = 1;
+	}
+	if (!fd) {
 		perror("open");
 		return -1;
 	}
-	fs = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+
+	// If using an existing file system image, mmap the entire file.
+	// Otherwise, create a file system of the desired size.
+	if (!fs_is_new) {
+		struct stat statbuf;
+		if (fstat(fd, &statbuf) < 0) {
+			perror("stat");
+			return -1;
+		}
+		fs_size = statbuf.st_size;
+	} else {
+		printf("Creating new file system...\n");
+		ftruncate(fd, 0);
+		lseek(fd, size, SEEK_SET);
+		write(fd, "\0", 1);
+		fs_size = size;
+	}
+
+	fs = mmap(NULL, fs_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (!fs) {
 		perror("mmap");
 		return -1;
 	}
+
+	// If file system is newly created, initialise everything.
+	if (fs_is_new) {
+		if (init_fs(fs_size) < 0)
+			return -1;
+	}
+
+	read_sb();
 	close(fd); 
-	return init_fs(size);
+
+	pr_debug("File system successfully mounted.\n");
+	return 0;
 }
 
 /*
