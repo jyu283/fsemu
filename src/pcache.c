@@ -8,6 +8,7 @@
 #include "fsemu.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 struct pcache *pcache;
@@ -36,12 +37,12 @@ static int hash(const char *s) {
  * A separate hash function to compare pathnames. 
  * path_cache_entry.hash2 uses this function.
  */
-static unsigned long hash2(unsigned char *str)
+static unsigned long hash2(const char *str)
 {
     unsigned long hash = 5381;
     int c;
 
-    while (c = *str++)
+    while ((c = *str++))
         hash = ((hash << 5) + hash) + c;  // hash * 33 + c
 
     return hash;
@@ -58,6 +59,16 @@ int pcache_init(void)
 		return -1;
 	}
 	memset(pcache, 0, sizeof(*pcache));
+	return 0;
+}
+
+/**
+ * Free the pathname cache.
+ */
+void pcache_free(void)
+{
+	free(pcache);
+	pcache = NULL;
 }
 
 /**
@@ -67,7 +78,7 @@ int pcache_init(void)
  * calculated index to see if the path represented by the entry is
  * the same as the one requested.
  */
-struct dentry *pcache_lookup(const char *pathname)
+struct dentry *pcache_lookup(const char *pathname, struct inode **pi)
 {
 	struct dentry *dent = NULL;
 	int h = hash(pathname);
@@ -75,6 +86,16 @@ struct dentry *pcache_lookup(const char *pathname)
 
 	if (pcache->data[h].hash2 == h2)
 		dent = pcache->data[h].dent;
+	
+	if (pi)
+		*pi = pcache->data[h].pi;
+
+#ifdef DEBUG
+	if (dent)
+		pr_debug("PCACHE HIT:  %s.\n", pathname);
+	else 
+		pr_debug("PCACHE MISS: %s.\n", pathname);
+#endif
 
 	return dent;
 }
@@ -84,13 +105,14 @@ struct dentry *pcache_lookup(const char *pathname)
  *
  * Creates an entry for the given pathname.
  */
-void pcache_put(const char *pathname, struct dentry *dent)
+void pcache_put(const char *pathname, struct dentry *dent, struct inode *pi)
 {
 	int h = hash(pathname);
-	int h2 = hash(pathname);
+	int h2 = hash2(pathname);
 
 	pcache->data[h].dent = dent;
 	pcache->data[h].hash2 = h2;
+	pcache->data[h].pi = pi;
 }
 
 void db_pcache_dump(void)
@@ -98,7 +120,7 @@ void db_pcache_dump(void)
 	printf("Path cache dump: \n");
 	for (int i = 0; i < PATH_CACHE_SIZE; i++) {
 		if (pcache->data[i].dent) {
-			printf("[%d] %s inum #%d (h2=%d, addr=%p)\n", i, 
+			printf("[%d] %s inum #%d (h2=%ld, addr=%p)\n", i, 
 					pcache->data[i].dent->name,
 					pcache->data[i].dent->inum,
 					pcache->data[i].hash2, pcache->data[i].dent);

@@ -14,6 +14,7 @@
 
 struct pcache_entry {
 	struct dentry 	*dent;
+	struct inode	*pi;
 	unsigned long	hash2;
 };
 
@@ -24,9 +25,10 @@ struct pcache {
 extern struct pcache *pcache;
 
 int pcache_init(void);
+void pcache_free(void);
 
-struct dentry *pcache_lookup(const char *pathname);
-void pcache_put(const char *path, struct dentry *dent);
+struct dentry *pcache_lookup(const char *pathname, struct inode **pi);
+void pcache_put(const char *pathname, struct dentry *dent, struct inode *pi);
 
 #ifdef DEBUG
 void db_pcache_dump(void);
