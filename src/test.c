@@ -9,6 +9,7 @@
 #include "fs_syscall.h"
 #include "util.h"
 #include "dentry_cache.h"
+#include "pcache.h"
 
 void test(void)
 {
