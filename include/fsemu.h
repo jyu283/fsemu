@@ -16,7 +16,12 @@
 #define DEBUG   
 
 #ifdef DEBUG
-#define pr_debug(...) fprintf(stderr, __VA_ARGS__)
+#define pr_debug(...) \
+	do {	\
+		fprintf(stderr, "DEBUG: (%s, %d): %s: ", 	\
+				__FILE__, __LINE__, __func__);	\
+		fprintf(stderr, __VA_ARGS__);	\
+	} while(0)
 #else
 #define pr_debug(...) do { } while (0)
 #endif
