@@ -229,13 +229,14 @@ static void free_dent(struct dentry *dent)
  * Find an unused dentry in dir and initialize it with
  * a name and an inode.
  */
-static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
+static struct dentry *new_dentry(struct inode *dir, 
+								struct inode *inode, const char *name)
 {
 	struct dentry *dent = get_unused_dentry(dir);	
 	if (!dent)
-		return -EALLOC;
+		return NULL;
 	init_dent(dent, inode, name);
-	return 0;
+	return dent;
 }
 
 /*
@@ -243,11 +244,11 @@ static int new_dentry(struct inode *dir, struct inode *inode, const char *name)
  */
 static int init_dir_inode(struct inode *dir, struct inode *parent)
 {
-	if (new_dentry(dir, dir, ".") < 0) {
+	if (!new_dentry(dir, dir, ".")) {
 		printf("Error: failed to create . dentry.\n");
 		return -EALLOC;
 	}
-	if (new_dentry(dir, parent, "..") < 0) {
+	if (!new_dentry(dir, parent, "..")) {
 		printf("Error: failed to create .. dentry.\n");
 		return -EALLOC;
 	}
@@ -275,7 +276,7 @@ int do_creat(struct inode *dir, const char *name, uint8_t type)
 		printf("Error: failed to allocate inode.\n");
 		return -EALLOC;
 	}
-	if (new_dentry(dir, inode, name) < 0) {
+	if (!new_dentry(dir, inode, name)) {
 		printf("Error: failed to create dentry %s.\n", name);
 		return -EALLOC;
 	}
@@ -368,6 +369,20 @@ static struct dentry *lookup_dent(const struct inode *dir, const char *name)
 		}
 	}
 	return NULL;
+}
+
+/**
+ * Update the . and .. entries in a directory inode.
+ */
+static void update_dir_inode(struct inode *dir, struct inode *parent)
+{
+	if (dir->type != T_DIR)
+		return;
+
+	struct dentry *dot = lookup_dent(dir, ".");
+	struct dentry *dotdot = lookup_dent(dir, "..");
+	dot->inum = inum(dir);
+	dotdot->inum = inum(parent);
 }
 
 /**
@@ -548,6 +563,42 @@ int fs_creat(const char *pathname)
 	get_filename(pathname, filename);
 
 	return do_creat(dir, filename, T_REG);
+}
+
+/**
+ * Basic version of the POSIX rename system call.
+ * 
+ * WARNING: Not compatible with path cache. There is no mechanism
+ * with which to invalidate PCACHE entries at this point.
+ */
+int fs_rename(const char *oldpath, const char *newpath)
+{
+	struct dentry *olddent = NULL, *newdent = NULL;
+	struct inode *olddir = NULL, *newdir = NULL;
+	struct inode *inode;
+
+	// Old path must exist; new path will be overwritten if exists,
+	// but new path's parent directory must be present.
+	if (!dir_lookup(oldpath, &olddir) || !olddir) {
+		return -ENOFOUND;
+	}
+	inode = dentry_get_inode(olddent);
+	newdent = dir_lookup(newpath, &newdir);
+	if (!newdir)
+		return -ENOFOUND;
+
+	// If new path doesn't exist, create it.
+	if (!newdent) {
+		newdent = new_dentry(newdir, dentry_get_inode(olddent), olddent->name);
+	} else {
+		newdent = olddent;
+	}
+
+	// If the inode moved is a directory, update its . and .. entries.
+	if (inode->type == T_DIR) {
+		update_dir_inode(inode, newdir);
+	}
+	return 0;
 }
 
 /**
@@ -811,7 +862,11 @@ int fs_link(const char *oldpath, const char *newpath)
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(newpath, filename);
-	return new_dentry(dir, inode, filename);
+	if (!new_dentry(dir, inode, filename)) {
+		return -EALLOC;
+	} else {
+		return 0;
+	}
 }
 
 /**
