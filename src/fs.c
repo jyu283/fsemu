@@ -10,7 +10,13 @@
 #include "fserror.h"
 #include "util.h"
 #include "fsemu.h"
+
+#ifdef PCACHE_ENABLED
+#include "pcache.h"
+#endif  // DCACHE_ENABLED
+#ifdef DCACHE_ENABLED
 #include "dentry_cache.h"
+#endif  // PCACHE_ENABLED
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -305,16 +311,30 @@ static int init_fs(size_t size)
 {
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
-	init_fd();				// create file descriptors
 
-#ifdef DENTRY_CACHE
+	pr_debug("File system initialization completed!\n");
+	return 0;
+}
+
+/**
+ * Initialize in-memory caches.
+ */
+static int init_caches(void)
+{
+#ifdef DCACHE_ENABLED
 	if (dentry_cache_init_all() < 0) {
 		printf("Error: failed to initialize dentry cache.\n");
 		return -1;
 	}
-#endif
+#endif  // DCACHE_ENABLED
 
-	pr_debug("File system initialization completed!\n");
+#ifdef PCACHE_ENABLED
+	if (pcache_init() < 0) {
+		printf("Error: failed to initialize path cache.\n");
+		return -1;
+	}
+#endif  // PCACHE_ENABLED
+
 	return 0;
 }
 
@@ -435,8 +455,14 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 {
 	struct dentry *dent, *curr;
 	struct inode *prev;
+	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
-	
+
+#ifdef PCACHE_ENABLED
+	if ((dent = pcache_lookup(pathname, pi)))
+		return dent;
+#endif  // PCACHE_ENABLED
+
 	prev = dentry_get_inode(&sb->rootdir);
 
 	// FIXME: lookup would fail if called with "/"
@@ -455,6 +481,11 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 	// pr_debug("\n\n");
 	if (pi)
 		*pi = prev;
+	
+#ifdef PCACHE_ENABLED
+	pcache_put(pathname_cpy, dent, prev);
+#endif  // PCACHE_ENABLED
+
 	return dent;
 }
 
@@ -907,6 +938,11 @@ int fs_mount(unsigned long size)
 			return -1;
 	}
 
+	// Initialize PCACHE/DCACHE if enabled.
+	if (init_caches() < 0)
+		return -1;
+
+	init_fd();
 	read_sb();
 	close(fd); 
 
@@ -914,31 +950,17 @@ int fs_mount(unsigned long size)
 	return 0;
 }
 
-/*
- * Create a dump of the entire file system
- */
-static void dump_fs(void)
-{
-	int fd;
-	if ((fd = open("fs.img", O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
-		perror("open");
-		return;
-	}
-	printf("Dumping file system to fs.img...\n");
-	if ((write(fd, fs, sb->size * BSIZE)) < 0) {
-		perror("write");
-	}
-	close(fd);
-}
-
 /**
  * Unmounts the file system.
  */
 int fs_unmount(void)
 {
-#ifdef DENTRY_CACHE
+#ifdef DCACHE_ENABLED
 	dentry_cache_free_all();
-#endif
+#endif  // DCACHE_ENABLED
+#ifdef PCACHE_ENABLED
+	pcache_free();
+#endif  // PCACHE_ENABLED
 	munmap(fs, sb->size * BSIZE);
 	return 0;
 }
