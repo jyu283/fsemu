@@ -22,8 +22,12 @@ static const char *errors[] = {
 	[ENOFD]		= "No available file descriptor",
 	[EINVFD]	= "Invalid file descriptor",
 	[ENOTEMPTY]	= "Directory is not empty",
-	[EINVFD]	= "Invalid parameter"
+	[EINVFD]	= "Invalid parameter",
+	[EARGS]		= "Invalid argument(s)",
+	[ECMD]		= "Command not found"
 };
+
+static char msg[64];
 
 /**
  * Returns a string explaining the error code.
@@ -33,7 +37,8 @@ const char *fs_strerror(int errno)
 	static int maxerrno;
 	maxerrno = sizeof(errors) / sizeof(errors[0]);
 	if (errno > 0 || errno < -maxerrno) {
-		return "strerror: bad error code";
+		sprintf(msg, "strerror: bad error code %d.\n", errno);
+		return msg;
 	} else {
 		return errors[-errno];
 	}
