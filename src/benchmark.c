@@ -34,14 +34,14 @@
  * dependency. (e.g. "/dir1/file" should not come before "/dir1".)
  * Component names can be anything (see fs.h for max name length.)
  */
-static int benchmark_init_fs(char *input_file)
+int benchmark_init_fs(const char *input_file)
 {
 	FILE *fp;
 	char *line = NULL, *pathname;
 	size_t len = 0;
 	int ret;
 
-	printf("Initializing file system based on %s...", input_file);
+	printf("Initializing file system based on %s...\n", input_file);
 	if (!(fp = fopen(input_file, "r"))) {
 		perror("open");
 		return -1;
@@ -62,20 +62,19 @@ static int benchmark_init_fs(char *input_file)
 		}
 
 		if (ret < 0) {
-			fs_pstrerror(ret, pathname);
 			return ret;
 		}
 	}
 
 	clock_t end = clock();
 	double runtime_main = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
-	printf("...(%.3fms)\n", runtime_main);
+	printf("Done in %.3fms.\n", runtime_main);
 
 	fclose(fp);
 	return 0;
 }
 
-static int benchmark_lookup(char *input_file)
+static int benchmark_lookup(const char *input_file)
 {
 	return 0;
 }
@@ -83,7 +82,7 @@ static int benchmark_lookup(char *input_file)
 /**
  * Benchmark function.
  */
-void benchmark(char *input_file)
+void benchmark(const char *input_file)
 {
 	printf("\n:: Starting benchmark...\n");
 
