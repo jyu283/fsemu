@@ -22,8 +22,14 @@ static int argc;
 static char *argv[MAXARGS];
 static uint64_t sysargs[MAXARGS];
 
-#define ARG_PTR	1
-#define ARG_VAL	0
+/* SYSCALL_DEFINEx(name)
+ * Defines a system call handler sys_name(), which must then be
+ * added to the syscalls[] array.
+ * Inspired by the Linux kernel version of these macros, albeit 
+ * implemented with much less elegance. The number x indicates 
+ * the number of arguments tihs system call has, and t1, t2, t3
+ * represents the types of each of these arguments.
+ */ 
 
 #define SYSCALL_DEFINE0(name) \
 	static int sys_ ## name(void) {	\
@@ -120,10 +126,25 @@ static int get_sysnum(const char *name)
 	return -1;
 }
 
+/**
+ * Checks argv[0] and calls the appropriate system call.
+ * First use the string to determine the corresponding system call ID;
+ * then parse the remainder of argv according to the parameters of each
+ * system call. 
+ *   - SYSCALL_ARGINT(x): Parse argv[x] as a numeric value
+ * 	 - SYSCALL_ARGPTR(x): Parse argv[x] as a pointer (to a string)
+ * If it is a valid system call (and one supported by the shell -- read
+ * and write are not supported directly), use the system call number to
+ * index into the system call table to call the appropriate function. 
+ * 
+ * Note: In order for the system call table to work, a function pointer
+ * must be added to the syscalls[] array, and a corresponding 
+ * SYSCALL_DEFINEx macro must be present.
+ */
 static int syscall_handler(void)
 {
-#define if_syscall(x)	if (strcmp(argv[0], #x) == 0)
-#define check_argc(x)	if (argc != x+1) ret = -EARGS; goto out;
+#define check_argc(x)	\
+	do { if (argc != x+1) { ret = -EARGS; goto out; }} while (0)
 #define SYSCALL_ARGINT(x)	sysargs[x] = (uint64_t)atol(argv[x+1])
 #define SYSCALL_ARGPTR(x)	sysargs[x] = (uint64_t)argv[x+1] 
 
@@ -134,38 +155,50 @@ static int syscall_handler(void)
 		goto out;
 	} 
 
-	if_syscall(mount) {
+	switch (sysnum)
+	{
+	case SYS_mount: 
 		check_argc(1);
 		SYSCALL_ARGINT(0);
-	} else if_syscall(unmount) {
-		check_argc(0)
-	} else if_syscall(open) {
+		break;
+	case SYS_unmount:
+		check_argc(0);
+		break;
+	case SYS_open:
 		check_argc(1);
 		SYSCALL_ARGPTR(0);
-	} else if_syscall(close) {
+		break;
+	case SYS_close:
 		check_argc(1);
 		SYSCALL_ARGINT(0);
-	} else if_syscall(unlink) {
+		break;
+	case SYS_unlink:
 		check_argc(1);
 		SYSCALL_ARGPTR(0);
-	} else if_syscall(link) {
+		break;
+	case SYS_link:
 		check_argc(2);
 		SYSCALL_ARGPTR(0);
 		SYSCALL_ARGPTR(1);
-	} else if_syscall(mkdir) {
+		break;
+	case SYS_mkdir:
 		check_argc(1);
 		SYSCALL_ARGPTR(0);
-	} else if_syscall(rmdir) {
+		break;
+	case SYS_rmdir:
 		check_argc(1);
 		SYSCALL_ARGPTR(0);
-	} else if_syscall(creat) {
+		break;
+	case SYS_creat:
 		check_argc(1);
 		SYSCALL_ARGPTR(0);
-	} else if_syscall(rename) {
+		break;
+	case SYS_rename:
 		check_argc(2);
 		SYSCALL_ARGPTR(0);
 		SYSCALL_ARGPTR(1);
-	} else {
+		break;
+	default:
 		ret = -ECMD;
 		goto out;
 	}
@@ -179,6 +212,21 @@ out:
 		ret = -1;
 	}
 	return ret;
+}
+
+/**
+ * Handles the load [FILE] command.
+ */
+static void load_handler()
+{
+	if (argc != 2) {
+		printf("Usage: load [FILE]\n");
+		return;
+	}
+
+	int ret = benchmark_init_fs((const char *)argv[1]);
+	if (ret < 0)
+		printf("Benchmark failed: %s.\n", fs_strerror(ret));
 }
 
 /**
@@ -210,7 +258,7 @@ static void ls_handler()
 	} else {
 		for (int i = 1; i < argc; i++) {
 			if (ls(argv[i]) < 0) {
-				fs_pstrerror(ENOFOUND, "ls");
+				fs_pstrerror(-ENOFOUND, "ls");
 			}
 		}
 	}
@@ -223,16 +271,18 @@ static int process_args()
 {
 	// Handle "user programs" such as ls
 	if (strcmp(argv[0], "ls") == 0) {
-		ls_handler(argc, argv);
+		ls_handler();
 		return 0;
 	} else if (strcmp(argv[0], "cat") == 0) {
-		cat_handler(argc, argv);
+		cat_handler();
+		return 0;
+	} else if (strcmp(argv[0], "load") == 0) {
+		load_handler();
 		return 0;
 	}
 
 	// system call handling
 	syscall_handler();
-
 	return 0;
 }
 
