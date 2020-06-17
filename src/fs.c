@@ -26,7 +26,7 @@
 #include <string.h>
 #include <stdint.h>
 
-char *fs;
+char *fs = NULL;
 struct superblock *sb;
 struct inode *inodes;
 char *bitmap;
@@ -948,6 +948,12 @@ int fs_mount(unsigned long size)
 	size_t fs_size;
 	int fs_is_new = 0;
 	int fd;
+
+	if (fs) {
+		printf("Error: file system is already mounted.\n");
+		return -1;
+	}
+
 	if (size > MAXFSSIZE) {
 		printf("Error: file system size cannot be greater than 1GB.\n");
 		return -1;
@@ -1010,6 +1016,9 @@ int fs_mount(unsigned long size)
  */
 int fs_unmount(void)
 {
+	if (!fs)
+		return -1;
+
 #ifdef DCACHE_ENABLED
 	dentry_cache_free_all();
 #endif  // DCACHE_ENABLED
@@ -1017,5 +1026,6 @@ int fs_unmount(void)
 	pcache_free();
 #endif  // PCACHE_ENABLED
 	munmap(fs, sb->size * BSIZE);
+	fs = NULL;
 	return 0;
 }
