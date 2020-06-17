@@ -51,7 +51,8 @@ struct inode {
 	uint8_t			type; 
 };
 
-#define DENTRYNAMELEN   (256 - sizeof(int))
+#define DENTRYSIZE		256
+#define DENTRYNAMELEN   (DENTRYSIZE - sizeof(int))
 #define DENTPERBLK		(BSIZE / sizeof(struct dentry))
 
 struct dentry {
