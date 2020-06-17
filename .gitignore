@@ -6,4 +6,5 @@
 **.hex
 input_file.txt
 **.data
+cachegrind*
 
