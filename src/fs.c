@@ -161,19 +161,18 @@ static int free_inode(struct inode *inode)
  */
 static struct dentry *get_unused_dentry(struct inode *dir)
 {
-	struct dentry *dents;
-	int unused = -1;	// record of first unused block
+	struct dentry_block *block;
+	int unused = -1;
 	for (int i = 0; i < NDIR - 1; i++) {
 		if (dir->data[i]) {
-			dents = BLKADDR(dir->data[i]);
+			block = BLKADDR(dir->data[i]);
 			for (int j = 0; j < DENTPERBLK; j++) {
-				if (dents[j].inum == 0)
-					return &dents[j];
+				if (block->dents[j].inum == 0)
+					return &block->dents[j];
 			}
 		} else {
-			if (unused == -1) {
+			if (unused == -1)
 				unused = i;
-			}
 		}
 	}
 
@@ -199,7 +198,8 @@ static inline void init_dent(struct dentry *dent, struct inode *inode,
 {
 	dent->inum = inum(inode);
 	inode->nlink++;
-	strcpy(dent->name, name);
+	strcpy(dentry_get_name(dent), name);
+	dent->name_hash = dentry_hash(name);
 }
 
 /**
@@ -213,7 +213,8 @@ static void free_dent(struct dentry *dent)
 	struct inode *inode = dentry_get_inode(dent);
 
 	dent->inum = 0;
-	dent->name[0] = '\0';
+	dent->name_hash = 0;
+	dentry_get_name(dent)[0] = '\0';
 
 	/* This check should be redundant. */
 	if (inode) {
@@ -293,7 +294,6 @@ int do_creat(struct inode *dir, const char *name, uint8_t type)
 static void init_rootdir(void)
 {
 	struct inode *rootino = alloc_inode(T_DIR);     
-	init_dent(&sb->rootdir, rootino, "/");
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
@@ -341,15 +341,23 @@ static int init_caches(void)
 
 /**
  * Locate a dentry in a block of dentries.
+ * 
+ * Cache-light split dentry:
+ * First check dent->name_hash to quickly dismiss non-matching dentries.
+ * If name_hash is a match, then use strcmp on the full name to confirm.
  */
 static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 {
-	struct dentry *dents = (struct dentry *)BLKADDR(blocknum);
+	struct dentry_block *block = (struct dentry_block*)BLKADDR(blocknum);
+	unsigned long name_hash = dentry_hash(name);
+
 	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inum && strcmp(dents[i].name, name) == 0) {
-			return &dents[i];
+		if (block->dents[i].inum && block->dents[i].name_hash == name_hash) {
+			if (strcmp(name, block->ext[i].name) == 0)
+				return &block->dents[i];
 		}
 	}
+
 	return NULL;
 }
 
@@ -478,7 +486,7 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 		return dent;
 #endif  // PCACHE_ENABLED
 
-	prev = dentry_get_inode(&sb->rootdir);
+	prev = get_root_inode();
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
@@ -589,7 +597,7 @@ int fs_rename(const char *oldpath, const char *newpath)
 
 	// If new path doesn't exist, create it.
 	if (!newdent) {
-		newdent = new_dentry(newdir, dentry_get_inode(olddent), olddent->name);
+		newdent = new_dentry(newdir, dentry_get_inode(olddent), dentry_get_name(olddent));
 	} else {
 		newdent = olddent;
 	}
@@ -896,9 +904,9 @@ static int dir_block_isempty(uint32_t b)
 	struct dentry *dents = (struct dentry *)BLKADDR(b);
 	for (int i = 0; i < DENTPERBLK; i++) {
 		if (dents[i].inum) {
-			if (strcmp(dents[i].name, ".") == 0)
+			if (strcmp(dentry_get_name(&dents[i]), ".") == 0)
 				continue;
-			if (strcmp(dents[i].name, "..") == 0)
+			if (strcmp(dentry_get_name(&dents[i]), "..") == 0)
 				continue;
 			// valid dentry is neither . nor ..
 			return -1;
