@@ -24,7 +24,7 @@ static void db_print_hashtable(struct hashtable *ht)
 	for (int i = 0; i < PRIMESIZE; i++) {
 		dent = ht->data[i].dent;
 		if (dent)
-			printf("(%p, %s) ", dent, dent->name);
+			printf("(%p, %s) ", dent, dentry_get_name(dent));
 	}
 	printf("]\n");
 }

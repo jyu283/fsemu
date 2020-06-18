@@ -31,14 +31,14 @@ static char *type_names[] = {
  */
 static inline void print_dirents(uint32_t block_num)
 {
-	struct dentry *dents = (struct dentry *)BLKADDR(block_num);
+	struct dentry_block *block = (struct dentry_block *)BLKADDR(block_num);
 	struct inode *inode;
 	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inum) {
-			inode = dentry_get_inode(&dents[i]);
+		if (block->dents[i].inum) {
+			inode = dentry_get_inode(&block->dents[i]);
 			printf("%s %-3d %-16s %-6d inode=%p [%p]\n", 
-				type_names[inode->type], inode->nlink, dents[i].name, 
-				inode->size, inode, &dents[i]);
+				type_names[inode->type], inode->nlink, dentry_get_name(&block->dents[i]), 
+				inode->size, inode, &block->dents[i]);
 		}
 	}
 }
@@ -46,31 +46,34 @@ static inline void print_dirents(uint32_t block_num)
 /*
  * Perform ls on a given directory
  */
-static void ls_dir(struct dentry *dent)
+static void ls_dir(struct inode *dir, const char *name)
 {
-	printf("%s \n", dent->name);
-	struct inode *inode = dentry_get_inode(dent);
-	if (inode->type != T_DIR)
+	printf("%s \n", name);
+	if (dir->type != T_DIR)
 		return;
 	for (int i = 0; i < NDIR; i++) {
-		if (inode->data[i]) {
-			print_dirents(inode->data[i]);
+		if (dir->data[i]) {
+			print_dirents(dir->data[i]);
 		}
 	}
 }
 
 int ls(const char *pathname)
 {
-	struct dentry *src;
+	struct inode *src;
+	char *name = "/";
 	if (strcmp(pathname, "/") == 0) {
-		src = &sb->rootdir;
+		src = get_root_inode();
 	} else {
-		if (!(src = lookup(pathname)))
+		struct dentry *src_dent;
+		if (!(src_dent = lookup(pathname)))
 			return -1;
+		src = dentry_get_inode(src_dent);
+		name = dentry_get_name(src_dent);
 	}
 
 	// For now only prints out the root's contents
-	ls_dir(src);
+	ls_dir(src, name);
 	puts("");
 	return 0;
 }
@@ -83,8 +86,9 @@ void lsfd(void)
 	printf("open file descriptors: \n");
 	for (int i = 0; i < MAXOPENFILES; i++) {
 		if (openfiles[i].f_dentry) {
-			printf(" [%d] %s (off=%d)\n", i, openfiles[i].f_dentry->name,
-											openfiles[i].offset);
+			printf(" [%d] %s (off=%d)\n", i, 
+					dentry_get_name(openfiles[i].f_dentry),
+					openfiles[i].offset);
 		}
 	}
 	puts("");
