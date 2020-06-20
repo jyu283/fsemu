@@ -7,6 +7,7 @@
 #include "fs_syscall.h"
 #include "fserror.h"
 #include "util.h"
+#include "fs.h"
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -74,8 +75,30 @@ int benchmark_init_fs(const char *input_file)
 	return 0;
 }
 
-static int benchmark_lookup(const char *input_file)
+int benchmark_lookup(const char *input_file)
 {
+	FILE *fp;
+	char *line = NULL, *pathname;
+	size_t len = 0;
+
+	printf("Initiating benchmark based on %s...\n", input_file);
+	if (!(fp = fopen(input_file, "r"))) {
+		perror("open");
+		return -1;
+	}
+
+	clock_t begin = clock();
+	while (getline(&line, &len, fp) != -1) {
+		line[strlen(line) - 1] = '\0';  // clear trailing \n
+		pathname = line + 2;
+		lookup(pathname);
+	}
+
+	clock_t end = clock();
+	double runtime_main = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
+	printf("Done in %.3fms.\n", runtime_main);
+
+	fclose(fp);
 	return 0;
 }
 

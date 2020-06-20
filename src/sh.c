@@ -230,6 +230,24 @@ static void load_handler()
 }
 
 /**
+ * Handles the benchmark [FILE] command.
+ */
+static void benchmark_handler()
+{
+	if (argc != 2 && argc != 3) {
+		printf("Usage: benchmark [FILE] [repcount]\n");
+		return;
+	}
+
+	int repcount = 1;
+	if (argc == 3)
+		repcount = atoi(argv[2]);
+	for (int i = 0; i < repcount; i++) {
+		benchmark_lookup((const char *)argv[1]);
+	}
+}
+
+/**
  * Handles cat command.
  */
 static void cat_handler()
@@ -278,6 +296,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "load") == 0) {
 		load_handler();
+		return 0;
+	} else if (strcmp(argv[0], "benchmark") == 0) {
+		benchmark_handler();
 		return 0;
 	}
 
