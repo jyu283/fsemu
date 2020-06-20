@@ -121,7 +121,7 @@ void db_pcache_dump(void)
 	for (int i = 0; i < PATH_CACHE_SIZE; i++) {
 		if (pcache->data[i].dent) {
 			printf("[%d] %s inum #%d (h2=%ld, addr=%p)\n", i, 
-					pcache->data[i].dent->name,
+					dentry_get_name(pcache->data[i].dent),
 					pcache->data[i].dent->inum,
 					pcache->data[i].hash2, pcache->data[i].dent);
 		}

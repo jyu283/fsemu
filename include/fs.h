@@ -16,6 +16,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define MAXFSSIZE   0x40000000
 #define BSIZE       0x1000      // block size = 4096 bytes 
@@ -51,14 +52,66 @@ struct inode {
 	uint8_t			type; 
 };
 
-#define DENTRYSIZE		256
-#define DENTRYNAMELEN   (DENTRYSIZE - sizeof(int))
-#define DENTPERBLK		(BSIZE / sizeof(struct dentry))
+#define ROOTINO		1
+
+#define DENTRYNAMELEN	255  // Just like in EXT2 and EXT4 
+#define DENTRYSIZE		(sizeof(struct dentry) + sizeof(struct dentry_ext))
+#define DENTPERBLK		(BSIZE / DENTRYSIZE)
+
+/**
+ * Split dentry:
+ * Each directory block will be split into two sections:
+ * The first is a compact lookup table with hash values. (struct dentry)
+ * The second (struct dentry_ext) contains the full file names as well 
+ * as the inum of the corresponding directory entry.
+ */
 
 struct dentry {
+	unsigned long	name_hash;
 	int				inum;
+};
+
+struct dentry_ext {
 	char			name[DENTRYNAMELEN];
 };
+
+struct dentry_block {
+	struct dentry		dents[DENTPERBLK];
+	struct dentry_ext	ext[DENTPERBLK];
+};
+
+/**
+ * Hash function to obtain name_hash in struct dentry.
+ */
+static unsigned long dentry_hash(const char *name)
+{
+    unsigned long hash = 5381;
+    int c;
+
+    while ((c = *name++))
+        hash = ((hash << 5) + hash) + c;  // hash * 33 + c
+
+    return hash;
+}
+
+/**
+ * Obtain the (detached) extended section of a dentry.
+ * 
+ * Exploits the fact that blocks are 4K aligned (at least I damn well
+ * hope so) to calculate where the extended part corresponding to a
+ * dentry should be.
+ */
+static inline struct dentry_ext *dentry_get_ext(struct dentry *dent)
+{
+	struct dentry_block *block = (void *)dent - ((unsigned long)dent % BSIZE);
+	int off = ((unsigned long)dent - (unsigned long)block) / sizeof(struct dentry);
+	return &block->ext[off];
+}
+
+static inline char *dentry_get_name(struct dentry *dent)
+{
+	return (char *)&dentry_get_ext(dent)->name;
+}
 
 struct superblock {
 	uint64_t		size;       // total size in blocks
@@ -67,13 +120,22 @@ struct superblock {
 	uint64_t		nblocks;    // number of data blocks
 	uint64_t		inodestart;	// start of inodes
 	uint64_t		bitmapstart;	// start of bitmap
-	struct dentry	rootdir;	// root dentry
 };
 
 extern char *fs;
 extern struct superblock *sb;
 extern struct inode *inodes;
 extern char *bitmap;
+
+static inline struct inode *get_root_inode(void)
+{
+	return &inodes[ROOTINO];
+}
+
+static inline struct inode *dentry_get_inode(struct dentry *dent)
+{
+	return &inodes[dent->inum];
+}
 
 struct dentry *lookup(const char *pathname);
 struct dentry *dir_lookup(const char *pathname, struct inode **pi);
@@ -82,11 +144,5 @@ static inline int inum(struct inode *i)
 {
 	return (i - inodes);
 }
-
-static inline struct inode *dentry_get_inode(struct dentry *dent)
-{
-	return &inodes[dent->inum];
-}
-
 
 #endif  // __FS_H__
