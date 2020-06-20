@@ -30,7 +30,7 @@
  * 
  * Uncomment the following macros to enable the corresponding features.
  */
-#define PCACHE_ENABLED
+// #define PCACHE_ENABLED
 // #define DCACHE_ENABLED
 
 /*
