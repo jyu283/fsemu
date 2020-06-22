@@ -13,18 +13,12 @@ int maxFileNameLength = 20;
 int minDirNameLength = 3;
 int maxDirNameLength = 20;
 
-/*struct level{
-  int level;
-  entry * firstEntry;
-  level * nextLevel;
-};
-*/
 
 const char* fileNames[] = {"a", "uw", "log", "file", "trees", "flower", "project", "download", "documents", "photograph", "foobashbash", "bashbashbash", "foobarbazbash", "foobarbazzbash", "foobarbazfoobar", "starwarsanewhope", "empirestrikesback", "swrevengeofthesith", "c3por2d2bb8l3atat!-"/* ... etc ... */ };
-int* fileNameUsage[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int fileNameUsage[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 const char* extNames[] = {".c", ".py", ".txt"};
 const char* dirNames[] = {"uw", "log", "ewok", "users", "recent", "project", "download", "documents", "photograph", "development", "peanutbutter", "constellation", "antidepressant", "thefinalfrontier", "milleniumfalcon", "thunder&lightning", "unsatisfactoriness", "inagalaxyfarfaraway"};
-int* dirNameUsage[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int dirNameUsage[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 
 typedef struct file file;
@@ -46,20 +40,6 @@ struct dir{
 };
 
 
-/*union entry{
-  dir d;
-  file f;
-  };*/
-
-/*struct entry{
-  char type;
-  entry *  nextEntry;
-  char * name;
-  char * length;
-  };*/
-
-
-
 typedef struct{
   dir * root;
 } tree;
@@ -68,17 +48,17 @@ typedef struct{
 //print tree
 int printTree (dir * Dir, char* path, FILE * out){
   //print curr dir
-  fprintf( out, "D\t%s%s/\n", path, Dir->name);
+  fprintf( out, "D /%s%s/\n", path, Dir->name);
   //print curr directory files
   file * curr = Dir->files;
   while (curr != NULL){
-    fprintf( out , "F\t%s%s/%s\n", path, Dir->name, curr->name);
+    fprintf( out , "F /%s%s/%s\n", path, Dir->name, curr->name);
     curr = curr->next;
   }
   //for loop to recursively print directories
   dir * currD = Dir->dirs;
-  char * newpath = (char*) malloc(sizeof(path)+sizeof(Dir->name)+1);
-  sprintf( newpath, "%s%s/", path, Dir->name);
+  char * newpath = (char*) malloc(strlen(path)+strlen(Dir->name)+5);
+  sprintf( newpath, "/%s%s/", path, Dir->name);
   while (currD != NULL){
     //fprintf( out, "%s%s/%s/\n", path, dir->name, currD->name);
     //char * newpath = (char*) malloc(sizeof(path)+sizeof(Dir->name)+1);
@@ -119,7 +99,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles){
     if (i == 0){
       //file* new = (struct file*)malloc(sizeof(file));
       //char * name
-      curr->name= (char*) malloc(sizeof(fileNames[nameNum])+(sizeof(int)*8+1));
+      curr->name= (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //new->name = (char*) malloc((nameLen)*sizeof(char));
@@ -131,7 +111,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles){
       file* new = (struct file*)malloc(sizeof(file));
       curr->next = new;
       curr = curr->next;
-      curr->name = (char*) malloc(sizeof(fileNames[nameNum])+(sizeof(int)*8+1));
+      curr->name = (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       curr->length = sizeof(curr->name);
@@ -151,7 +131,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles){
     int nameLen = nameNum+minDirNameLength+1;
   //link dirs, name dirs
     if (i == 0){
-      currD->name= (char*) malloc(sizeof(dirNames[nameNum])+(sizeof(int)*8+1));
+      currD->name= (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       currD->length = sizeof(currD->name);
@@ -160,7 +140,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles){
       dir* new = (struct dir*)malloc(sizeof(dir));
       currD->next = new;
       currD = currD->next;
-      currD->name = (char*) malloc(sizeof(dirNames[nameNum])+(sizeof(int)*8+1));
+      currD->name = (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       currD->length = sizeof(currD->name);
@@ -186,24 +166,29 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles){
 int main(){
 
   
-  tree filesystem;
-
-  filesystem.root->name = "root";
-  filesystem.root->length = 4;
+  //tree filesystem;
+  dir root;
+  // filesystem.root->name = NULL;
+  // filesystem.root->name = (char*)malloc(sizeof(char)*5);
+  // strcpy(filesystem.root->name, "root");
+  root.name = "root";
+  // filesystem.root->name = "root";
+  root.length = 4;
+  
   int numDirs = rand() % (maxNumDirs - minNumDirs + 1);
   int numFiles = rand() % (maxNumFiles - minNumFiles + 1);
   //int depth = rand() % (maxTreeDepth - minTreeDepth +1);
   int depth = maxTreeDepth;
   
-  buildTree(filesystem.root, depth, numDirs, numFiles);
+  buildTree(&root, depth, numDirs, numFiles);
 
   FILE * out;
   out = fopen("filesystem.txt", "w");
   if( out == NULL) {
     return -1;
   }
-
-  printTree(filesystem.root, "", out);
+  char * path = "";
+  printTree(&root, path, out);
 
 
   return 0;
