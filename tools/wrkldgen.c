@@ -10,13 +10,6 @@ int maxSkips = 40;
 int main(){
 
   
-  //int numDirs = rand() % (maxNumDirs - minNumDirs + 1);
-  //int numFiles = rand() % (maxNumFiles - minNumFiles + 1);
-  //int depth = rand() % (maxTreeDepth - minTreeDepth +1);
-  //int depth = maxTreeDepth;
-  
-  //buildTree(&root, depth, numDirs, numFiles);
-
   FILE * out;
   out = fopen("workload.txt", "w");
   if( out == NULL) {
