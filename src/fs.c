@@ -438,7 +438,7 @@ static void get_filename(const char *pathname, char *name)
 	while (pathname[end] == '/')
 		end--;
 	start = end;
-	while (pathname[start - 1] != '/')
+	while (start > 0 && pathname[start - 1] != '/')
 		start--;
 	len = end - start + 1;
 	strncpy(name, &pathname[start], len);
