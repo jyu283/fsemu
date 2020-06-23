@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 int minTreeDepth = 1;
-int maxTreeDepth = 4;
+int maxTreeDepth = 15;
 int minNumFiles = 1;
 int maxNumFiles = 20;
 int minNumDirs = 1;
@@ -48,17 +48,17 @@ typedef struct{
 //print tree
 int printTree (dir * Dir, char* path, FILE * out){
   //print curr dir
-  fprintf( out, "D /%s%s/\n", path, Dir->name);
+  fprintf( out, "D %s%s/\n", path, Dir->name);
   //print curr directory files
   file * curr = Dir->files;
   while (curr != NULL){
-    fprintf( out , "F /%s%s/%s\n", path, Dir->name, curr->name);
+    fprintf( out , "F %s%s/%s\n", path, Dir->name, curr->name);
     curr = curr->next;
   }
   //for loop to recursively print directories
   dir * currD = Dir->dirs;
   char * newpath = (char*) malloc(strlen(path)+strlen(Dir->name)+5);
-  sprintf( newpath, "/%s%s/", path, Dir->name);
+  sprintf( newpath, "%s%s/", path, Dir->name);
   while (currD != NULL){
     //fprintf( out, "%s%s/%s/\n", path, dir->name, currD->name);
     //char * newpath = (char*) malloc(sizeof(path)+sizeof(Dir->name)+1);
@@ -187,7 +187,7 @@ int main(){
   if( out == NULL) {
     return -1;
   }
-  char * path = "";
+  char * path = "/";
   printTree(&root, path, out);
 
 
