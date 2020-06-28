@@ -79,21 +79,22 @@ class Inode():
         # be the last few dentries.
         random.shuffle(self.data)
 
-    def print(self, prefix=""):
+    def print_dir(self, prefix=""):
         if not self.isdir:
+            return
+        if self.data is None:
             return
 
         prefix += self.name
-
-        if self.data is None:
-            return
         subdirs = []
         for ent in self.data:
             if ent.isdir:
                 subdirs.append(ent)
-            print(prefix + ent.name)
+                print("D " + prefix + ent.name)
+            else:
+                print("F " + prefix + ent.name)
         for ent in subdirs:
-            ent.print(prefix)
+            ent.print_dir(prefix)
 
 
 root = None
@@ -105,7 +106,7 @@ def fsgen(ofpath):
         sys.stdout = open(ofpath, "w")
     root = Inode("/", 0) 
     root.populate()
-    root.print()
+    root.print_dir()
 
     # Restore stdout
     if stdout is not None:
