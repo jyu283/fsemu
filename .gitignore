@@ -7,4 +7,5 @@
 input_file.txt
 **.data
 cachegrind*
+**.out
 
