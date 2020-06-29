@@ -31,16 +31,29 @@ class Inode():
     avg_dirsize = 10 
     avg_depth = 5 
     avg_namelen = 10 
+    uniform_dirs = True
     total_inodes = 0
+    level_count = []
 
-    def __init__(self, name, level, isdir=False):
+    def __init__(self, name, level, ndirs, isdir=False):
         self.data = None  # List of contents if directory, None if file
         self.name = name
         self.level = level
         self.isdir = isdir
+        # If uniform directories is turned off, allow customisation
+        if Inode.uniform_dirs is False:
+            self.ndirs = ndirs if ndirs > 1 else 1
+        else:
+            self.ndirs = Inode.avg_nsubdir
+        if (len(Inode.level_count)) <= level:
+            Inode.level_count.insert(level, 0)
+        Inode.level_count[level] += 1
 
     def new_entry(self, name, isdir=False):
-        ent = Inode(name, self.level + 1, isdir)
+        if Inode.uniform_dirs is True:
+            ent = Inode(name, self.level + 1, Inode.avg_nsubdir, isdir)
+        else:
+            ent = Inode(name, self.level + 1, self.ndirs - 2, isdir)
         self.data.append(ent)
         Inode.total_inodes += 1
         return ent
@@ -56,7 +69,7 @@ class Inode():
         self.isdir = True
 
         # Create a number of regular files
-        for _ in range(Inode.avg_dirsize - Inode.avg_nsubdir):
+        for _ in range(Inode.avg_dirsize - self.ndirs):
             name = self.rand_name(random.randrange(Inode.avg_namelen - 4, 
                                                 Inode.avg_namelen))
             # apply file extension
@@ -68,7 +81,7 @@ class Inode():
             return
 
         # create a number (self.NSUBDIRS) of sub-directories
-        for _ in range(Inode.avg_nsubdir):
+        for _ in range(self.ndirs):
             name = self.rand_name(random.randrange(Inode.avg_namelen - 2,
                                                     Inode.avg_namelen + 2))
             name += "/"
@@ -100,11 +113,15 @@ class Inode():
 root = None
 
 def fsgen(ofpath):
+    print("Inode.uniform_dirs:", Inode.uniform_dirs)
     stdout = None 
     if ofpath is not None:
         stdout = sys.stdout
         sys.stdout = open(ofpath, "w")
-    root = Inode("/", 0) 
+    if Inode.uniform_dirs is True:
+        root = Inode("/", 0, isdir=True, ndirs=Inode.avg_nsubdir) 
+    else:
+        root = Inode("/", 0, isdir=True, ndirs=Inode.avg_dirsize)
     root.populate()
     root.print_dir()
 
@@ -112,6 +129,19 @@ def fsgen(ofpath):
     if stdout is not None:
         sys.stdout = stdout
     print("Total inodes:", Inode.total_inodes)
+    for i in range(len(Inode.level_count)):
+        print("Level", i, "contains", Inode.level_count[i], "inode(s).")
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def main():
@@ -133,8 +163,7 @@ def main():
         help="the number of subdirectories per directory",
         type=int,
         default=Inode.avg_nsubdir,
-        metavar="NUM"
-    )
+        metavar="NUM")
     parser.add_argument(
         "-n", "--namelen",
         help="the average length of directory and file names",
@@ -142,20 +171,31 @@ def main():
         default=Inode.avg_namelen,
         metavar="LEN")
     parser.add_argument(
-        "-o",
+        "-o", "--output",
         help="the file to write results to",
         metavar="FILE")
+    parser.add_argument(
+        "--uniform",
+        help="if FALSE, there will be more subdirectories on top levels; "
+             "if TRUE, all directories will have the same number of "
+             "subdirectories, as specified by the --subdir flag",
+        metavar="<bool>",
+        type=str2bool,
+        default=True)
     args = parser.parse_args()
 
-    if args.dirsize < Inode.avg_nsubdir:
+    if args.dirsize < args.subdir:
         print("Error: dirsize must be greater than", Inode.avg_nsubdir)
         return
 
     Inode.avg_dirsize = args.dirsize
     Inode.avg_depth = args.treedepth
     Inode.avg_namelen = args.namelen
+    Inode.avg_nsubdir = args.subdir
+    Inode.uniform_dirs = args.uniform
+    print(args)
 
-    fsgen(args.o)
+    fsgen(args.output)
     return
 
 if __name__ == "__main__":
