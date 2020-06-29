@@ -13,15 +13,23 @@ My third Python program. Perhaps ever so slightly less sh*te.
 
 import argparse
 import sys
+import string
 
-def do_wlgen(in_file, depth):
+def do_wlgen(in_file, depth, size):
 	line = in_file.readline()
+	count = 0
 	while line:
-		break	# TODO
+		if (line.startswith("D") and line.count("/") == (depth + 1)
+			or line.startswith("F") and line.count("/") == depth):
+			print(line, end="")  # There already is a \n in file
+			count = count + 1
+			if count >= size:
+				break
+		line = in_file.readline()
+	return count
 	
 
 def wlgen(args):
-	depth = args.depth
 	ifpath = args.input_file
 	in_file = open(ifpath, "r")
 
@@ -30,11 +38,12 @@ def wlgen(args):
 		stdout = sys.stdout
 		sys.stdout = open(args.out, "w")
 
-	do_wlgen(in_file, depth)
+	count = do_wlgen(in_file, args.depth, args.size)
 
 	if stdout is not None:
 		sys.stdout.close()
 		sys.stdout = stdout
+	print("Paths generated:", count)
 	in_file.close()
 	return
 
@@ -60,6 +69,7 @@ def main():
 	parser.add_argument(
 		"-s", "--size",
 		help="workload size",
+		type=int,
 		metavar="SIZE"
 	)
 	args = parser.parse_args()
