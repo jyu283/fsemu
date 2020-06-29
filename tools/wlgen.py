@@ -14,18 +14,23 @@ My third Python program. Perhaps ever so slightly less sh*te.
 import argparse
 import sys
 import string
+import random
 
 def do_wlgen(in_file, depth, size):
+	candidates = []
 	line = in_file.readline()
 	count = 0
 	while line:
 		if (line.startswith("D") and line.count("/") == (depth + 1)
 			or line.startswith("F") and line.count("/") == depth):
-			print(line, end="")  # There already is a \n in file
-			count = count + 1
-			if count >= size:
-				break
+			candidates.append(line)
 		line = in_file.readline()
+
+	random.shuffle(candidates)
+	# Huh, interesting syntax for a ternary expression
+	for i in range(size) if size <= len(candidates) else len(candidates):
+		print(candidates[i], end="")
+		count += 1
 	return count
 	
 
