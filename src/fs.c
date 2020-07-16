@@ -84,6 +84,8 @@ static void wipe_block(uint32_t blocknum)
 
 /*
  * Consult the bitmap and allocate a datablock.
+ * 
+ * Returns 0 for failure, positive int for allocated block number.
  */
 static uint32_t alloc_data_block(void)
 {
@@ -127,8 +129,11 @@ static struct inode *alloc_inode(uint8_t type)
 	for (int i = 1; i < sb->ninodes; i++) {
 		inode = &inodes[i];
 		if (inode->type == T_UNUSED) {
+			memset((void *)inode, 0x0, sizeof(struct inode));
 			inode->type = type;
-			inode->size = 0;
+			// Enable inline by default for directories.
+			if (type == T_DIR) 
+				inode->flags |= I_INLINE;
 			return inode;
 		}
 	}
@@ -146,14 +151,27 @@ static int free_inode(struct inode *inode)
 	if (inode->nlink > 0)
 		return -1;
 
-	for (int i = 0; i < NDIR; i++) {
-		if (inode->data[i]) {
-			free_data_block(inode->data[i]);
-			inode->data[i] = 0;
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (inode->data.blocks[i]) {
+			free_data_block(inode->data.blocks[i]);
+			inode->data.blocks[i] = 0;
 		}
 	}
 	inode->type = T_UNUSED;
 	return 0;
+}
+
+/**
+ * Find an unused dentry spot from a block.
+ */
+static struct dentry *get_unused_dentry_from_block(uint32_t block_num)
+{
+	struct dentry_block *block = BLKADDR(block_num);
+	for (int j = 0; j < DENTPERBLK; j++) {
+		if (block->dents[j].inum == 0)
+			return &block->dents[j];
+	}
+	return NULL;
 }
 
 /*
@@ -162,14 +180,13 @@ static int free_inode(struct inode *inode)
 static struct dentry *get_unused_dentry(struct inode *dir)
 {
 	struct dentry_block *block;
+	struct dentry *dent;
 	int unused = -1;
-	for (int i = 0; i < NDIR - 1; i++) {
-		if (dir->data[i]) {
-			block = BLKADDR(dir->data[i]);
-			for (int j = 0; j < DENTPERBLK; j++) {
-				if (block->dents[j].inum == 0)
-					return &block->dents[j];
-			}
+	for (int i = 0; i < NBLOCKS - 1; i++) {
+		if (dir->data.blocks[i]) {
+			dent = get_unused_dentry_from_block(dir->data.blocks[i]);
+			if (dent)
+				return dent;
 		} else {
 			if (unused == -1)
 				unused = i;
@@ -180,20 +197,20 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 		return NULL;
 
 	// allocate new data block to unused address
-	if ((dir->data[unused] = alloc_data_block()) == 0) {
+	if ((dir->data.blocks[unused] = alloc_data_block()) == 0) {
 		printf("Error: data allocation failed.\n");
 		return NULL;
 	}
 
 	dir->size += BSIZE;  // increase directory size by one block
-	return (struct dentry *)BLKADDR(dir->data[unused]);
+	return (struct dentry *)BLKADDR(dir->data.blocks[unused]);
 }
 
 /**
  * Initialize a dentry with a name and link it to the inode.
  * As a result of this linkage, the inode's nlink is incremented.
  */
-static inline void init_dent(struct dentry *dent, struct inode *inode,
+static inline void init_regular_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
 	dent->inum = inum(inode);
@@ -227,24 +244,132 @@ static void free_dent(struct dentry *dent)
 }
 
 /**
+ * Create a new inline directory entry.
+ */
+static struct dentry *new_inline_dentry(struct inode *dir,
+										struct inode *inode, const char *name)
+{
+	pr_debug("Attempting to create new inline dentry %s...\n", name);
+	struct dentry_inline *dent;
+	for_each_inline_dent(dent, dir) {
+		if (dent->inum != 0)
+			continue;
+		uint8_t reclen = get_inline_dent_reclen(name);	
+		uint8_t namelen = strlen(name) + 1;
+
+		// This dentry is not large enough
+		if (dent->reclen != 0 && dent->reclen < reclen)
+			continue;
+
+		// This is a never-before-used dentry.
+		if (dent->reclen == 0) {
+			if (inline_dent_can_fit(dir, dent, reclen))
+				dent->reclen = reclen;
+			else
+				break;
+		}
+
+		dent->namelen = namelen;
+		dent->inum = inum(inode);
+		strcpy(dent->name, name);
+
+		/* * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+			* WARNING: 
+			* Do not use this return value. This needs to be fixed.
+			* * * * * * * * * * * * * * * * * * * * * * * * * * * */
+		return (struct dentry *)dent;	// FIXME
+	}
+	return NULL;
+}
+
+/**
+ * Converts an inline directory to a regular directory.
+ * 
+ * First, allocate a new block for this directory, then fill in the
+ * "." and ".." dentries. Finally, convert all inline entries to
+ * regular entries and place them also in the block, which is then
+ * attached to the inode.
+ */
+static int dir_convert_inline_to_reg(struct inode *dir)
+{
+	if (!inode_is_inline_dir(dir))
+		return -1;
+
+	pr_debug(":: Converting inline directory to regular directory.\n");
+
+	struct dentry *reg_dent;
+	uint32_t block = alloc_data_block();
+	if (!block) 
+		return -1;
+
+	// dot entry
+	reg_dent = get_unused_dentry_from_block(block);
+	init_regular_dent(reg_dent, dir, ".");
+	// dot dot entry
+	reg_dent = get_unused_dentry_from_block(block);
+	init_regular_dent(reg_dent, &inodes[dir->data.inline_dir.p_inum], "..");
+
+	// Conver the inline directory entries and fill in the block.
+	struct dentry_inline *inline_dent;
+	for_each_inline_dent(inline_dent, dir) {
+		if (!inline_dent->reclen)
+			break;
+		reg_dent = get_unused_dentry_from_block(block);	
+		init_regular_dent(reg_dent, 
+						&inodes[inline_dent->inum], inline_dent->name);
+	}
+
+	// Unset the inline bit in flag
+	dir->flags &= ~I_INLINE;
+
+	// Wipe out the inode.data area, and set the first block
+	// Thus dawns a new age for this directory inode.
+	memset(&dir->data, 0x0, sizeof(dir->data));
+	dir->data.blocks[0] = block;
+	return 0;
+}
+
+/**
  * Find an unused dentry in dir and initialize it with
  * a name and an inode.
+ * 
+ * FIXME: WARNING: DO NOT USE RETURN VALUE. See warning in fs.h
  */
 static struct dentry *new_dentry(struct inode *dir, 
 								struct inode *inode, const char *name)
 {
-	struct dentry *dent = get_unused_dentry(dir);	
+	struct dentry *dent;
+	if (inode_is_inline_dir(dir)) {
+		if ((dent = new_inline_dentry(dir, inode, name)))
+			return dent;  // DO NOT USE THIS RETURN VALUE
+		// If failed to allocate inline, convert directory inode
+		// to regular mode.
+		dir_convert_inline_to_reg(dir);
+	}
+
+	dent = get_unused_dentry(dir);	
 	if (!dent)
 		return NULL;
-	init_dent(dent, inode, name);
+	init_regular_dent(dent, inode, name);
 	return dent;
 }
 
 /*
  * Create the . and .. dentries for a directory inode.
+ * 
+ * OR: If inline directories are enabled, simply use the first 
+ * 4 bytes of inode.data to store the parent dir's inum.
  */
 static int init_dir_inode(struct inode *dir, struct inode *parent)
 {
+	// Inline directory
+	if (inode_is_inline_dir(dir)) {
+		dir->data.inline_dir.p_inum = inum(parent);
+		dir->data.inline_dir.dent.inum = 0;
+		return 0;
+	}
+
+	// Regular directory
 	if (!new_dentry(dir, dir, ".")) {
 		printf("Error: failed to create . dentry.\n");
 		return -EALLOC;
@@ -294,6 +419,7 @@ int do_creat(struct inode *dir, const char *name, uint8_t type)
 static void init_rootdir(void)
 {
 	struct inode *rootino = alloc_inode(T_DIR);     
+	pr_debug("Root inum: %d\n", inum(rootino));
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
@@ -369,9 +495,10 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 static struct dentry *lookup_dent(const struct inode *dir, const char *name)
 {
 	struct dentry *dent = NULL;
-	for (int i = 0; i < NDIR - 1; i++) {
-		if (dir->data[i]) {
-			dent = find_dent_in_block(dir->data[i], name);
+
+	for (int i = 0; i < NBLOCKS - 1; i++) {
+		if (dir->data.blocks[i]) {
+			dent = find_dent_in_block(dir->data.blocks[i], name);
 			if (dent)
 				return dent;
 		}
@@ -387,10 +514,14 @@ static void update_dir_inode(struct inode *dir, struct inode *parent)
 	if (dir->type != T_DIR)
 		return;
 
-	struct dentry *dot = lookup_dent(dir, ".");
-	struct dentry *dotdot = lookup_dent(dir, "..");
-	dot->inum = inum(dir);
-	dotdot->inum = inum(parent);
+	if (inode_is_inline_dir(dir)) {
+		dir->data.inline_dir.p_inum = inum(parent);
+	} else {
+		struct dentry *dot = lookup_dent(dir, ".");
+		struct dentry *dotdot = lookup_dent(dir, "..");
+		dot->inum = inum(dir);
+		dotdot->inum = inum(parent);
+	}
 }
 
 /**
@@ -578,6 +709,8 @@ int fs_creat(const char *pathname)
  * 
  * WARNING: Not compatible with path cache. There is no mechanism
  * with which to invalidate PCACHE entries at this point.
+ * 
+ * WARNING: This needs to be fixed after the inline directory date.
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
@@ -683,13 +816,13 @@ static char *get_off_addr(struct inode *file, unsigned int off, int alloc)
 {
 	char *addr = NULL;
 	int b = off / BSIZE;
-	if (file->data[b]) {
-		addr = BLKADDR(file->data[b]) + off % BSIZE;
+	if (file->data.blocks[b]) {
+		addr = BLKADDR(file->data.blocks[b]) + off % BSIZE;
 	} else {
 		if (alloc) {
-			file->data[b] = alloc_data_block();
-			if (file->data[b]) {
-				addr = BLKADDR(file->data[b]) + off % BSIZE;
+			file->data.blocks[b] = alloc_data_block();
+			if (file->data.blocks[b]) {
+				addr = BLKADDR(file->data.blocks[b]) + off % BSIZE;
 			}
 		}
 	}
@@ -920,9 +1053,9 @@ static int dir_block_isempty(uint32_t b)
  */
 static int dir_isempty(struct inode *dir)
 {
-	for (int i = 0; i < NDIR; i++) {
-		if (dir->data[i]) {
-			if (!dir_block_isempty(dir->data[i]))
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (dir->data.blocks[i]) {
+			if (!dir_block_isempty(dir->data.blocks[i]))
 				return -ENOTEMPTY;
 		}
 	}
