@@ -16,6 +16,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #define MAXFSSIZE   0x40000000
@@ -43,14 +44,63 @@
 #define T_REG		1
 #define T_DIR		2
 #define T_DEV		3
-#define NDIR		16
+#define NBLOCKS		15
+
+/* Inode flags */
+#define I_INLINE	0x00000001
+
+/**
+ * FIXME:
+ * WARNING: Multiple dentry formats.
+ * As of now, due to the inline dentry update. There exists
+ * two types of dentries. The split dentry design will be 
+ * discarded soon in the future, at which point there will be
+ * only ONE type of dentry (extendible).
+ */
+struct dentry_inline {
+	uint32_t	inum;
+	uint8_t 	reclen;
+	uint8_t 	namelen;
+	char 		name[0];
+};
 
 struct inode {
 	uint32_t		nlink;
 	uint32_t		size;
-	uint32_t		data[NDIR];
+	uint32_t		flags;
+	union {
+		uint32_t	blocks[NBLOCKS];
+		struct {
+			uint32_t				p_inum;
+			struct dentry_inline	dent;
+		} inline_dir;
+	} data;
 	uint8_t			type; 
 };
+
+// For loop to traverse through inline directories
+#define for_each_inline_dent(dent, dir) \
+	for (dent = &dir->data.inline_dir.dent;\
+		 (char *)dent < (char *)&dir->data + \
+		 		sizeof(dir->data) - sizeof(struct dentry_inline);\
+		 dent = (struct dentry_inline *)((char *)dent + dent->reclen))
+
+static inline bool inode_is_inline_dir(struct inode *inode)
+{
+	return (inode->flags & I_INLINE);
+}
+
+static inline uint8_t get_inline_dent_reclen(const char *name)
+{
+	return (sizeof(struct dentry_inline) + strlen(name) + 1);
+}
+
+static inline bool inline_dent_can_fit(struct inode *di, 
+										struct dentry_inline *dent,
+										uint8_t reclen)
+{
+	return ((char *)dent + reclen < (char *)&di->data + sizeof(di->data));
+}
 
 #define ROOTINO		1
 
@@ -67,8 +117,8 @@ struct inode {
  */
 
 struct dentry {
-	unsigned long	name_hash;
 	int				inum;
+	unsigned int	name_hash;
 };
 
 struct dentry_ext {
@@ -83,9 +133,9 @@ struct dentry_block {
 /**
  * Hash function to obtain name_hash in struct dentry.
  */
-static unsigned long dentry_hash(const char *name)
+static unsigned int dentry_hash(const char *name)
 {
-    unsigned long hash = 5381;
+    unsigned int hash = 5381;
     int c;
 
     while ((c = *name++))
