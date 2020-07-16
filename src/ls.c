@@ -19,15 +19,17 @@ static char *type_names[] = {
 	[T_DEV]     = "DEVICE"
 };
 
+static inline void print_inode(struct inode *inode, const char *name)
+{
+	printf("%s %-3d %-16s %-6d inode=%p\n",
+		type_names[inode->type], inode->nlink, name,
+		inode->size, inode);
+}
+
 /**
  * Print out a block of dentries in something resembling 
  * the following format:
  * (Does not print out unused dentries)
- * 
- * DIR      .        512   [0x7fd81340] [2]
- * DIR      ..       512   [0x7fd412a0] [4]
- * FILE     hello.c  54    [0x7f4d9fd0] [1]
- * FILE     hello    231   [0x7f4e0200] [1]
  */
 static inline void print_dirents(uint32_t block_num)
 {
@@ -36,9 +38,7 @@ static inline void print_dirents(uint32_t block_num)
 	for (int i = 0; i < DENTPERBLK; i++) {
 		if (block->dents[i].inum) {
 			inode = dentry_get_inode(&block->dents[i]);
-			printf("%s %-3d %-16s %-6d inode=%p [%p]\n", 
-				type_names[inode->type], inode->nlink, dentry_get_name(&block->dents[i]), 
-				inode->size, inode, &block->dents[i]);
+			print_inode(inode, dentry_get_name(&block->dents[i]));
 		}
 	}
 }
@@ -51,6 +51,17 @@ static void ls_dir(struct inode *dir, const char *name)
 	printf("%s \n", name);
 	if (dir->type != T_DIR)
 		return;
+
+	// if inline directory
+	if (inode_is_inline_dir(dir)) {
+		struct dentry_inline *inline_dent;
+		for_each_inline_dent(inline_dent, dir) {
+			if (inline_dent->inum)
+				print_inode(&inodes[inline_dent->inum], inline_dent->name);
+		}
+		return;
+	}
+
 	for (int i = 0; i < NBLOCKS; i++) {
 		if (dir->data.blocks[i]) {
 			print_dirents(dir->data.blocks[i]);
