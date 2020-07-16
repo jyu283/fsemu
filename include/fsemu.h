@@ -21,9 +21,20 @@
 		fprintf(stderr, "DEBUG: (%s, %d): %s: ", 	\
 				__FILE__, __LINE__, __func__);	\
 		fprintf(stderr, __VA_ARGS__);	\
-	} while(0)
+	} while (0)
+
+#define pr_warn(...)\
+    do {    \
+        fprintf(stderr, "\033[1;31m");  \
+		fprintf(stderr, "WARNING: (%s, %d): %s: ", 	\
+				__FILE__, __LINE__, __func__);	\
+		fprintf(stderr, __VA_ARGS__);   \
+        fprintf(stderr, "\033[0m;"); \
+    } while (0)
+
 #else
-#define pr_debug(...) do { } while (0)
+#define pr_debug(...)   do { } while (0)
+#define pr_warn(...)    do { } while (0) 
 #endif
 
 #define MAXOPENFILES    32
