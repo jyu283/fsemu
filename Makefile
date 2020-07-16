@@ -22,6 +22,7 @@ mkdir    = mkdir -p
 
 
 $(TARGET): $(OBJECTS)
+	$(rm) fs.img
 	$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
 
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
