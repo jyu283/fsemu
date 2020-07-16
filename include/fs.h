@@ -79,11 +79,11 @@ struct inode {
 };
 
 // For loop to traverse through inline directories
-#define for_each_inline_dent(dent, dir) \
-	for (dent = &dir->data.inline_dir.dent;\
-		 (char *)dent < (char *)&dir->data + \
+#define for_each_inline_dent(d, dir) \
+	for (d = &dir->data.inline_dir.dent;\
+		 (char *)d < (char *)&dir->data + \
 		 		sizeof(dir->data) - sizeof(struct dentry_inline);\
-		 dent = (struct dentry_inline *)((char *)dent + dent->reclen))
+		 d = (struct dentry_inline *)((char *)d + d->reclen))
 
 static inline bool inode_is_inline_dir(struct inode *inode)
 {
