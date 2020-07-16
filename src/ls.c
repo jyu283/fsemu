@@ -51,9 +51,9 @@ static void ls_dir(struct inode *dir, const char *name)
 	printf("%s \n", name);
 	if (dir->type != T_DIR)
 		return;
-	for (int i = 0; i < NDIR; i++) {
-		if (dir->data[i]) {
-			print_dirents(dir->data[i]);
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (dir->data.blocks[i]) {
+			print_dirents(dir->data.blocks[i]);
 		}
 	}
 }
