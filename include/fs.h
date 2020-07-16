@@ -79,10 +79,15 @@ struct inode {
 };
 
 // For loop to traverse through inline directories
+// Criteria for advancing the pointer:
+// - That the current pointer is still within the valid inline data area
+// - That the reclen of the current dentry is not 0, which indicates a
+//   never-before used dentry and therefore the end of the dentry list.
 #define for_each_inline_dent(d, dir) \
 	for (d = &dir->data.inline_dir.dent;\
-		 (char *)d < (char *)&dir->data + \
-		 		sizeof(dir->data) - sizeof(struct dentry_inline);\
+		 ((char *)d < (char *)&dir->data + \
+		 		sizeof(dir->data) - sizeof(struct dentry_inline)) \
+			  && (d->reclen != 0);\
 		 d = (struct dentry_inline *)((char *)d + d->reclen))
 
 static inline bool inode_is_inline_dir(struct inode *inode)
