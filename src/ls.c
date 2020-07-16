@@ -59,6 +59,8 @@ static void ls_dir(struct inode *dir, const char *name)
 		print_inode(dir, ".");
 		print_inode(&inodes[dir->data.inline_dir.p_inum], "..");
 		for_each_inline_dent(inline_dent, dir) {
+			if (!inline_dent->reclen)
+				break;
 			if (inline_dent->inum)
 				print_inode(&inodes[inline_dent->inum], inline_dent->name);
 		}
