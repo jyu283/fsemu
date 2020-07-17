@@ -211,7 +211,6 @@ static inline void init_regular_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
 	dent->inum = inum(inode);
-	inode->nlink++;
 	strcpy(dentry_get_name(dent), name);
 	dent->name_hash = dentry_hash(name);
 }
@@ -290,6 +289,9 @@ static struct dentry *new_inline_dentry(struct inode *dir,
 		dent->inum = inum(inode);
 		strcpy(dent->name, name);
 
+		// INCREMENT INODE NLINK COUNT
+		inode->nlink++;
+
 		return (struct dentry *)dent;	// FIXME
 	}
 	return NULL;
@@ -315,6 +317,10 @@ static int dir_convert_inline_to_reg(struct inode *dir)
 	if (!block) 
 		return -1;
 
+	/* 
+	 * The . and .. entry. Note that we call init_regular_dent() here,
+	 * which would NOT increment the nlink count, which is what we want.
+	 */
 	// dot entry
 	reg_dent = get_unused_dentry_from_block(block);
 	init_regular_dent(reg_dent, dir, ".");
@@ -364,6 +370,7 @@ static struct dentry *new_dentry(struct inode *dir,
 	if (!dent)
 		return NULL;
 	init_regular_dent(dent, inode, name);
+	inode->nlink++;
 	return dent;
 }
 
@@ -389,6 +396,13 @@ static int init_dir_inode(struct inode *dir, struct inode *parent)
 	if (inode_is_inline_dir(dir)) {
 		dir->data.inline_dir.p_inum = inum(parent);
 		dir->data.inline_dir.dent.inum = 0;
+
+		// In a regular directory we would create the . and ..
+		// entries, thereby incrementing the two directories'
+		// nlink count. Here, we'll have to fake that.
+		dir->nlink++;     // for the would-have-been "." entry
+		parent->nlink++;  // for the would-have-been ".." entry
+
 		return 0;
 	}
 
