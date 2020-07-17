@@ -241,6 +241,26 @@ static void free_dent(struct dentry *dent)
 }
 
 /**
+ * Free an inline dentry and unlink it from its inode.
+ * 
+ * TODO: Coalesce adjacent free dentries.
+ */
+static void free_inline_dent(struct dentry_inline *dent)
+{
+	struct inode *inode = inode_from_inum(dent->inum);
+
+	dent->namelen = 0;
+	dent->inum = 0;
+
+	if (inode) {
+		inode->nlink--;
+		if (inode->nlink == 0) {
+			free_inode(inode);
+		}
+	}
+}
+
+/**
  * Create a new inline directory entry.
  */
 static struct dentry *new_inline_dentry(struct inode *dir,
@@ -310,7 +330,9 @@ static int dir_convert_inline_to_reg(struct inode *dir)
 	struct dentry_inline *inline_dent;
 	for_each_inline_dent(inline_dent, dir) {
 		if (!inline_dent->reclen)
-			break;
+			break;  // end of list
+		if (!inline_dent->inum)
+			continue;  // empty item
 		reg_dent = get_unused_dentry_from_block(block);	
 		init_regular_dent(reg_dent, 
 						&inodes[inline_dent->inum], inline_dent->name);
@@ -349,6 +371,16 @@ static struct dentry *new_dentry(struct inode *dir,
 		return NULL;
 	init_regular_dent(dent, inode, name);
 	return dent;
+}
+
+/**
+ * Copy src's data to dest
+ */
+static void copy_reg_dentry(struct dentry *dest, struct dentry *src)
+{
+	dest->inum = src->inum;
+	dest->name_hash = src->name_hash;
+	strcpy(dentry_get_name(dest), dentry_get_name(src));
 }
 
 /*
@@ -478,14 +510,38 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 }
 
 /**
+ * Lookup a dentry in a given INLINE directory (inode).
+ * WARNING: Do not use return value.
+ */
+static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
+{
+	struct dentry_inline *dent = NULL;
+	int namelen = strlen(name) + 1;
+
+	for_each_inline_dent(dent, dir) {
+		if (dent->reclen == 0)
+			break;
+		if (namelen == dent->namelen && strncmp(name, dent->name, namelen) == 0) {
+			return (struct dentry *)dent;	// FIXME
+		}	
+	}
+	return NULL;
+}
+
+/**
  * Lookup a dentry in a given directory (inode).
  * Helper function for lookup() but for now it's basically all
  * lookup() does.
  */
-static struct dentry *lookup_dent(const struct inode *dir, const char *name)
+static struct dentry *lookup_dent(struct inode *dir, const char *name)
 {
-	struct dentry *dent = NULL;
+	// Inline directory lookup
+	if (inode_is_inline_dir(dir)) {
+		return lookup_inline_dent(dir, name);
+	}
 
+	// Regular lookup
+	struct dentry *dent = NULL;
 	for (int i = 0; i < NBLOCKS - 1; i++) {
 		if (dir->data.blocks[i]) {
 			dent = find_dent_in_block(dir->data.blocks[i], name);
@@ -614,10 +670,22 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 				prev = NULL;
 			break;
 		}
-		if (!path_is_empty(pathname))
-			prev = dentry_get_inode(dent);
+		if (!path_is_empty(pathname)) {
+			// Continue traversal, current directory becomes new prev.
+			// NOTE: The dentry returned can either be a regular one 
+			// or an inlined one. Therefore we check the directory type
+			// to determine which type of dentry to cast the pointer to.
+			// (Although technically unnecessary since inum is deliberately
+			// set to always be the first member of both structs)
+			if (inode_is_inline_dir(prev)) {
+				struct dentry_inline *inline_dent = (struct dentry_inline *)dent;
+				prev = inode_from_inum(inline_dent->inum);
+			} else {
+				prev = dentry_get_inode(dent);
+			}
+		}
 	}
-	// pr_debug("\n\n");
+
 	if (pi)
 		*pi = prev;
 	
@@ -688,6 +756,9 @@ int fs_creat(const char *pathname)
 /**
  * Basic version of the POSIX rename system call.
  * 
+ * NOTE: Behaviour when renaming old path to an existing new path:
+ *       NEW PATH SHOULD BE OVERWRITTEN.
+ * 
  * WARNING: This needs to be fixed after the inline directory date.
  */
 int fs_rename(const char *oldpath, const char *newpath)
@@ -698,22 +769,60 @@ int fs_rename(const char *oldpath, const char *newpath)
 
 	// Old path must exist; new path will be overwritten if exists,
 	// but new path's parent directory must be present.
-	if (!dir_lookup(oldpath, &olddir) || !olddir) {
+	if (!(olddent = dir_lookup(oldpath, &olddir)) || !olddir) {
 		return -ENOFOUND;
 	}
-	inode = dentry_get_inode(olddent);
+
+	// The name of the new file
+	char newname[DENTRYNAMELEN];
+	get_filename(newpath, newname);
+
+	// Obtain the inode
+	if (inode_is_inline_dir(olddir)) {
+		struct dentry_inline *inline_dent = (struct dentry_inline *)olddent;
+		inode = inode_from_inum(inline_dent->inum);
+	} else {
+		inode = dentry_get_inode(olddent);
+	}
+
 	newdent = dir_lookup(newpath, &newdir);
 	if (!newdir)
 		return -ENOFOUND;
 
-	// If new path doesn't exist, create it.
+	// If new path doesn't exist, create it. If it does, overwrite it.
 	if (!newdent) {
-		newdent = new_dentry(newdir, dentry_get_inode(olddent), dentry_get_name(olddent));
+		newdent = new_dentry(newdir, inode, newname);
 	} else {
-		newdent = olddent;
+		if (inode_is_inline_dir(newdir)) {
+			struct dentry_inline *inline_dent = (struct dentry_inline *)newdent;
+			uint8_t reclen = get_inline_dent_reclen(newname);
+			if (reclen > inline_dent->reclen) {
+				// existing inline dentry slot at new path cannot fit 
+				// new file name; remove it and retry.
+				free_inline_dent(inline_dent);
+				newdent = new_dentry(newdir, inode, newname);
+			} else {
+				// Existing inline dentry slot can accomodate the new
+				// entry, then copy over the information.
+				inline_dent->inum = inum(inode);
+				inline_dent->namelen = strlen(newname) + 1;
+				// reclen remains the same
+				strcpy(inline_dent->name, newname);
+			}
+		} else {
+			copy_reg_dentry(newdent, olddent);
+		}
+	}
+
+	// Free the old entry
+	if (inode_is_inline_dir(olddir)) {
+		free_inline_dent((struct dentry_inline *)olddent);
+	} else {
+		free_dent(olddent);
 	}
 
 	// If the inode moved is a directory, update its . and .. entries.
+	// (update_dir_inode handles the case of inline directories.)
 	if (inode->type == T_DIR) {
 		update_dir_inode(inode, newdir);
 	}
