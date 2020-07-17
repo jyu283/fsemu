@@ -290,10 +290,6 @@ static struct dentry *new_inline_dentry(struct inode *dir,
 		dent->inum = inum(inode);
 		strcpy(dent->name, name);
 
-		/* * * * * * * * * * * * * * * * * * * * * * * * * * * * 
-			* WARNING: 
-			* Do not use this return value. This needs to be fixed.
-			* * * * * * * * * * * * * * * * * * * * * * * * * * * */
 		return (struct dentry *)dent;	// FIXME
 	}
 	return NULL;
@@ -351,8 +347,6 @@ static int dir_convert_inline_to_reg(struct inode *dir)
 /**
  * Find an unused dentry in dir and initialize it with
  * a name and an inode.
- * 
- * FIXME: WARNING: DO NOT USE RETURN VALUE. See warning in fs.h
  */
 static struct dentry *new_dentry(struct inode *dir, 
 								struct inode *inode, const char *name)
@@ -360,7 +354,7 @@ static struct dentry *new_dentry(struct inode *dir,
 	struct dentry *dent;
 	if (inode_is_inline_dir(dir)) {
 		if ((dent = new_inline_dentry(dir, inode, name)))
-			return dent;  // DO NOT USE THIS RETURN VALUE
+			return dent; 
 		// If failed to allocate inline, convert directory inode
 		// to regular mode.
 		dir_convert_inline_to_reg(dir);
@@ -511,7 +505,6 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 
 /**
  * Lookup a dentry in a given INLINE directory (inode).
- * WARNING: Do not use return value.
  */
 static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
 {
@@ -758,8 +751,6 @@ int fs_creat(const char *pathname)
  * 
  * NOTE: Behaviour when renaming old path to an existing new path:
  *       NEW PATH SHOULD BE OVERWRITTEN.
- * 
- * WARNING: This needs to be fixed after the inline directory date.
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
