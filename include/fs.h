@@ -115,7 +115,7 @@ static inline bool inline_dent_can_fit(struct inode *di,
  */
 
 struct dentry {
-	int				inum;
+	uint32_t		inum;
 	unsigned int	name_hash;
 };
 
@@ -180,9 +180,14 @@ static inline struct inode *get_root_inode(void)
 	return &inodes[ROOTINO];
 }
 
+static inline struct inode *inode_from_inum(uint32_t inum)
+{
+	return &inodes[inum];
+}
+
 static inline struct inode *dentry_get_inode(struct dentry *dent)
 {
-	return &inodes[dent->inum];
+	return inode_from_inum(dent->inum);
 }
 
 struct dentry *lookup(const char *pathname);
