@@ -86,7 +86,8 @@ static int (*syscalls[])(void) = {
 	[SYS_creat]		sys_creat,
 	[SYS_lseek]		sys_lseek,
 	[SYS_read]		sys_read,
-	[SYS_write]		sys_write
+	[SYS_write]		sys_write,
+	[SYS_rename]	sys_rename
 };
 
 static const char *prompt = "(fsemu) ";
