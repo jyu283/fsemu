@@ -27,12 +27,10 @@
 #define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
 /* In-memory caches:
- * PCACHE: Pathname cache. Stores full pathname lookups.
  * DCACHE: Dentry cache. Stores contents of directories.
  * 
  * Uncomment the following macros to enable the corresponding features.
  */
-// #define PCACHE_ENABLED
 // #define DCACHE_ENABLED
 
 /*

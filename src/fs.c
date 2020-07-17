@@ -11,12 +11,9 @@
 #include "util.h"
 #include "fsemu.h"
 
-#ifdef PCACHE_ENABLED
-#include "pcache.h"
-#endif  // DCACHE_ENABLED
 #ifdef DCACHE_ENABLED
 #include "dentry_cache.h"
-#endif  // PCACHE_ENABLED
+#endif  // DCACHE_ENABLED
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -455,13 +452,6 @@ static int init_caches(void)
 	}
 #endif  // DCACHE_ENABLED
 
-#ifdef PCACHE_ENABLED
-	if (pcache_init() < 0) {
-		printf("Error: failed to initialize path cache.\n");
-		return -1;
-	}
-#endif  // PCACHE_ENABLED
-
 	return 0;
 }
 
@@ -612,11 +602,6 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
 
-#ifdef PCACHE_ENABLED
-	if ((dent = pcache_lookup(pathname, pi)))
-		return dent;
-#endif  // PCACHE_ENABLED
-
 	prev = get_root_inode();
 
 	// FIXME: lookup would fail if called with "/"
@@ -636,10 +621,6 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 	if (pi)
 		*pi = prev;
 	
-#ifdef PCACHE_ENABLED
-	pcache_put(pathname_cpy, dent, prev);
-#endif  // PCACHE_ENABLED
-
 	return dent;
 }
 
@@ -706,9 +687,6 @@ int fs_creat(const char *pathname)
 
 /**
  * Basic version of the POSIX rename system call.
- * 
- * WARNING: Not compatible with path cache. There is no mechanism
- * with which to invalidate PCACHE entries at this point.
  * 
  * WARNING: This needs to be fixed after the inline directory date.
  */
@@ -1140,7 +1118,7 @@ int fs_mount(unsigned long size)
 			return -1;
 	}
 
-	// Initialize PCACHE/DCACHE if enabled.
+	// Initialize DCACHE if enabled.
 	if (init_caches() < 0)
 		return -1;
 
@@ -1163,9 +1141,6 @@ int fs_unmount(void)
 #ifdef DCACHE_ENABLED
 	dentry_cache_free_all();
 #endif  // DCACHE_ENABLED
-#ifdef PCACHE_ENABLED
-	pcache_free();
-#endif  // PCACHE_ENABLED
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
 	return 0;
