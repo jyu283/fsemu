@@ -19,11 +19,19 @@ static char *type_names[] = {
 	[T_DEV]     = "DEVICE"
 };
 
-static inline void print_inode(struct inode *inode, const char *name)
+static inline void print_inode(struct hfs_inode *inode, const char *name)
 {
 	printf("%s %-3d %-16s %-6d inum=%d",
 		type_names[inode->type], inode->nlink, name,
 		inode->size, inum(inode));
+}
+
+static inline void print_dentry(struct hfs_dentry *dent)
+{
+	struct hfs_inode *inode = dentry_get_inode(dent);
+	print_inode(inode, dentry_get_name(dent));
+	printf("  rlen=%-3d nlen=%-3d off=%lu\n", dent->reclen, 
+					dent->namelen, (unsigned long)dent % BSIZE);
 }
 
 /**
@@ -31,23 +39,24 @@ static inline void print_inode(struct inode *inode, const char *name)
  * the following format:
  * (Does not print out unused dentries)
  */
-static inline void print_dirents(uint32_t block_num)
+static inline void print_dentry_block(uint32_t block_num)
 {
-	struct dentry_block *block = (struct dentry_block *)BLKADDR(block_num);
-	struct inode *inode;
-	for (int i = 0; i < DENTPERBLK; i++) {
-		if (block->dents[i].inum) {
-			inode = dentry_get_inode(&block->dents[i]);
-			print_inode(inode, dentry_get_name(&block->dents[i]));
-			puts("");
-		}
+	char *block = BLKADDR(block_num);
+	struct hfs_dentry *dent;
+	struct hfs_inode *inode;
+
+	for_each_block_dent(dent, block) {
+		if (dent->reclen == 0)
+			break;
+		if (dent->inum)
+			print_dentry(dent);
 	}
 }
 
 /*
  * Perform ls on a given directory
  */
-static void ls_dir(struct inode *dir, const char *name)
+static void ls_dir(struct hfs_inode *dir, const char *name)
 {
 	printf("%s \n", name);
 	if (dir->type != T_DIR)
@@ -56,7 +65,7 @@ static void ls_dir(struct inode *dir, const char *name)
 	// if inline directory
 	if (inode_is_inline_dir(dir)) {
 		printf("[Inline directory]\n");
-		struct dentry_inline *inline_dent;
+		struct hfs_dentry *inline_dent;
 		print_inode(dir, ".");
 		puts("");
 		print_inode(&inodes[dir->data.inline_dir.p_inum], "..");
@@ -65,29 +74,26 @@ static void ls_dir(struct inode *dir, const char *name)
 			if (!inline_dent->reclen)
 				break;
 			if (inline_dent->inum) {
-				print_inode(&inodes[inline_dent->inum], inline_dent->name);
-				printf("  reclen=%d namelen=%d\n", 
-						inline_dent->reclen, inline_dent->namelen);
+				print_dentry(inline_dent);
 			}
 		}
-		return;
-	}
-
-	for (int i = 0; i < NBLOCKS; i++) {
-		if (dir->data.blocks[i]) {
-			print_dirents(dir->data.blocks[i]);
+	} else {
+		for (int i = 0; i < NBLOCKS; i++) {
+			if (dir->data.blocks[i]) {
+				print_dentry_block(dir->data.blocks[i]);
+			}
 		}
 	}
 }
 
 int ls(const char *pathname)
 {
-	struct inode *src;
+	struct hfs_inode *src;
 	char *name = "/";
 	if (strcmp(pathname, "/") == 0) {
 		src = get_root_inode();
 	} else {
-		struct dentry *src_dent;
+		struct hfs_dentry *src_dent;
 		if (!(src_dent = lookup(pathname)))
 			return -1;
 		src = dentry_get_inode(src_dent);
