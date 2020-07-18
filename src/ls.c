@@ -21,7 +21,7 @@ static char *type_names[] = {
 
 static inline void print_inode(struct inode *inode, const char *name)
 {
-	printf("%s %-3d %-16s %-6d inum=%d\n",
+	printf("%s %-3d %-16s %-6d inum=%d",
 		type_names[inode->type], inode->nlink, name,
 		inode->size, inum(inode));
 }
@@ -39,6 +39,7 @@ static inline void print_dirents(uint32_t block_num)
 		if (block->dents[i].inum) {
 			inode = dentry_get_inode(&block->dents[i]);
 			print_inode(inode, dentry_get_name(&block->dents[i]));
+			puts("");
 		}
 	}
 }
@@ -57,12 +58,17 @@ static void ls_dir(struct inode *dir, const char *name)
 		printf("[Inline directory]\n");
 		struct dentry_inline *inline_dent;
 		print_inode(dir, ".");
+		puts("");
 		print_inode(&inodes[dir->data.inline_dir.p_inum], "..");
+		puts("");
 		for_each_inline_dent(inline_dent, dir) {
 			if (!inline_dent->reclen)
 				break;
-			if (inline_dent->inum)
+			if (inline_dent->inum) {
 				print_inode(&inodes[inline_dent->inum], inline_dent->name);
+				printf("  reclen=%d namelen=%d\n", 
+						inline_dent->reclen, inline_dent->namelen);
+			}
 		}
 		return;
 	}
