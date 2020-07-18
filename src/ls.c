@@ -21,9 +21,9 @@ static char *type_names[] = {
 
 static inline void print_inode(struct inode *inode, const char *name)
 {
-	printf("%s %-3d %-16s %-6d inode=%p\n",
+	printf("%s %-3d %-16s %-6d inum=%d\n",
 		type_names[inode->type], inode->nlink, name,
-		inode->size, inode);
+		inode->size, inum(inode));
 }
 
 /**
