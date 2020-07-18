@@ -18,6 +18,7 @@
 #define EINVAL      9   // A system call parameter is invalid
 #define EARGS		10	// Invalid arguments
 #define ECMD		11	// Command not found
+#define ESAME       12  // Source and target are the same file
 
 const char *fs_strerror(int errno);
 void fs_pstrerror(int errno, const char *title);

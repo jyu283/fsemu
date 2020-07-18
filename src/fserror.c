@@ -24,7 +24,8 @@ static const char *errors[] = {
 	[ENOTEMPTY]	= "Directory is not empty",
 	[EINVFD]	= "Invalid parameter",
 	[EARGS]		= "Invalid argument(s)",
-	[ECMD]		= "Command not found"
+	[ECMD]		= "Command not found",
+	[ESAME]		= "Source and destation are the same file"
 };
 
 static char msg[64];
