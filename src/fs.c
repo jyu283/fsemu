@@ -141,7 +141,7 @@ static struct inode *alloc_inode(uint8_t type)
  * Frees an inode and all the data blocks it uses.
  * 
  * Do not call this function to remove a file!
- * Use free_dent instead which will call this function.
+ * Use unlink_dent instead which will call this function.
  */
 static int free_inode(struct inode *inode)
 {
@@ -211,23 +211,19 @@ static inline void init_regular_dent(struct dentry *dent, struct inode *inode,
 							const char *name)
 {
 	dent->inum = inum(inode);
-	strcpy(dentry_get_name(dent), name);
-	dent->name_hash = dentry_hash(name);
+	dentry_set_name(dent, name);
 }
 
 /**
- * This should be the function called when removing a file!
- * 
- * Free a dentry and unlink it from the inode.
+ * Unlinks a dentry from its inode.
  * As a result of this unlinking, the inode's nlink is decremented.
+ * 
+ * NOTE: Do NOT reset the name. The rename() system call relies on this
+ * function not wiping out the name.
  */
-static void free_dent(struct dentry *dent)
+static void unlink_dent(struct dentry *dent)
 {
 	struct inode *inode = dentry_get_inode(dent);
-
-	dent->inum = 0;
-	dent->name_hash = 0;
-	dentry_get_name(dent)[0] = '\0';
 
 	/* This check should be redundant. */
 	if (inode) {
@@ -237,19 +233,21 @@ static void free_dent(struct dentry *dent)
 			free_inode(inode);
 		}
 	}
+	dent->inum = 0;
 }
 
 /**
- * Free an inline dentry and unlink it from its inode.
+ * Unlinks an inline dentry from its inode.
+ * Decrement the inode's nlink count.
+ * 
+ * NOTE: Do NOT reset the name. The rename() system call relies on this
+ * function not wiping out the name.
  * 
  * TODO: Coalesce adjacent free dentries.
  */
-static void free_inline_dent(struct dentry_inline *dent)
+static void unlink_inline_dent(struct dentry_inline *dent)
 {
 	struct inode *inode = inode_from_inum(dent->inum);
-
-	dent->namelen = 0;
-	dent->inum = 0;
 
 	if (inode) {
 		inode->nlink--;
@@ -257,6 +255,7 @@ static void free_inline_dent(struct dentry_inline *dent)
 			free_inode(inode);
 		}
 	}
+	dent->inum = 0;
 }
 
 /**
@@ -265,13 +264,11 @@ static void free_inline_dent(struct dentry_inline *dent)
 static struct dentry *new_inline_dentry(struct inode *dir,
 										struct inode *inode, const char *name)
 {
-	pr_debug("Attempting to create new inline dentry %s...\n", name);
 	struct dentry_inline *dent;
 	for_each_inline_dent(dent, dir) {
 		if (dent->inum != 0)
 			continue;
 		uint8_t reclen = get_inline_dent_reclen(name);	
-		uint8_t namelen = strlen(name) + 1;
 
 		// This dentry is not large enough
 		if (dent->reclen != 0 && dent->reclen < reclen)
@@ -285,9 +282,8 @@ static struct dentry *new_inline_dentry(struct inode *dir,
 				break;
 		}
 
-		dent->namelen = namelen;
 		dent->inum = inum(inode);
-		strcpy(dent->name, name);
+		inline_dentry_set_name(dent, name);
 
 		// INCREMENT INODE NLINK COUNT
 		inode->nlink++;
@@ -372,16 +368,6 @@ static struct dentry *new_dentry(struct inode *dir,
 	init_regular_dent(dent, inode, name);
 	inode->nlink++;
 	return dent;
-}
-
-/**
- * Copy src's data to dest
- */
-static void copy_reg_dentry(struct dentry *dest, struct dentry *src)
-{
-	dest->inum = src->inum;
-	dest->name_hash = src->name_hash;
-	strcpy(dentry_get_name(dest), dentry_get_name(src));
 }
 
 /*
@@ -528,6 +514,8 @@ static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
 	for_each_inline_dent(dent, dir) {
 		if (dent->reclen == 0)
 			break;
+		if (dent->inum == 0)
+			continue;
 		if (namelen == dent->namelen && strncmp(name, dent->name, namelen) == 0) {
 			return (struct dentry *)dent;	// FIXME
 		}	
@@ -761,10 +749,57 @@ int fs_creat(const char *pathname)
 }
 
 /**
+ * Update a dentry in place. Used for special case of rename()
+ * where new path and old path are in the same directory, and
+ * new path does not exist.
+ * 
+ * @param dir		The directory in which the update is to happen
+ * @param dent		The dentry to try to update
+ * @param newname	The new name for the dentry
+ * @return			0 for success, -1 for failure
+ */
+static int try_rename_dentry_in_place(struct inode *dir, struct dentry *dent,
+									const char *newname)
+{
+	if (inode_is_inline_dir(dir)) {
+		struct dentry_inline *inline_dent = (struct dentry_inline *)dent;
+		uint8_t reclen = get_inline_dent_reclen(newname);
+		if (inline_dent->reclen >= reclen) {
+			inline_dentry_set_name(inline_dent, newname);
+			return 0;
+		} else {
+			return -1;
+		}
+	} else {
+		// Regular dentry: simply update name
+		dentry_set_name(dent, newname);
+		return 0;
+	}
+}
+
+/**
  * Basic version of the POSIX rename system call.
  * 
  * NOTE: Behaviour when renaming old path to an existing new path:
  *       NEW PATH SHOULD BE OVERWRITTEN.
+ * 
+ * rename() logic: 
+ * IF: "newpath" does not exist:
+ *    IF: newpath is in the same directory as old path,
+ * 		  try to re-use old path's entry.
+ * 			-> successful: We're done.
+ * 			-> failed:     free the old entry and [make a new one].
+ * 	  ELSE: new path is not in the same directory 
+ * 		    free the old entry and [make a new one]
+ * ELSE: "newpath" already exists:
+ *    CHECK: newpath and old path cannot be same file!
+ * 	  (Both inline and regular directories)
+ * 		  update (overwrite) the destination dentry
+ * 		  free the old entry
+ * 
+ * NOTE: [make a new one]:
+ *    If at the end after freeing the old entry, newdent is NULL,
+ *    that's the signal to [make a new one].
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
@@ -796,41 +831,57 @@ int fs_rename(const char *oldpath, const char *newpath)
 
 	// If new path doesn't exist, create it. If it does, overwrite it.
 	if (!newdent) {
-		newdent = new_dentry(newdir, inode, newname);
-	} else {
-		if (inode_is_inline_dir(newdir)) {
-			struct dentry_inline *inline_dent = (struct dentry_inline *)newdent;
-			uint8_t reclen = get_inline_dent_reclen(newname);
-			if (reclen > inline_dent->reclen) {
-				// existing inline dentry slot at new path cannot fit 
-				// new file name; remove it and retry.
-				free_inline_dent(inline_dent);
-				newdent = new_dentry(newdir, inode, newname);
-			} else {
-				// Existing inline dentry slot can accomodate the new
-				// entry, then copy over the information.
-				inline_dent->inum = inum(inode);
-				inline_dent->namelen = strlen(newname) + 1;
-				// reclen remains the same
-				strcpy(inline_dent->name, newname);
+		/* No available dentry at new path. */
+		// Special case: rename is happening in place, then try to simply
+		// change the name by updating olddent.
+		if (newdir == olddir) {
+			if (try_rename_dentry_in_place(olddir, olddent, newname) == 0) {
+				goto done;  // in place update; everything done.
 			}
+		}
+	} else {
+		// If destination file already exists, then we do not need to 
+		// do anything about the name, just unlink the old inode and 
+		// replace it with a new one.
+
+		if (newdent == olddent)
+			return -ESAME;
+
+		if (inode_is_inline_dir(newdir)) {
+			// Free the original entry at destination
+			struct dentry_inline *inline_dent = (struct dentry_inline *)newdent;
+			unlink_inline_dent(inline_dent);
+			inline_dent->inum = inum(inode);
 		} else {
-			copy_reg_dentry(newdent, olddent);
+			// Free the original entry at destination
+			unlink_dent(newdent);
+			newdent->inum = olddent->inum;
 		}
 	}
 
-	// Free the old entry
+	// Free the old entry. But since doing so will decrement the inode's nlink
+	// and might cause it to be deleted, we first increment it by 1.
+	inode->nlink++;
 	if (inode_is_inline_dir(olddir)) {
-		free_inline_dent((struct dentry_inline *)olddent);
+		unlink_inline_dent((struct dentry_inline *)olddent);
 	} else {
-		free_dent(olddent);
+		unlink_dent(olddent);
 	}
 
+	if (!newdent) {
+		// Because we've already pre-incremented the nlink count, if
+		// we call new_dentry() here, it needs to be changed back.
+		new_dentry(newdir, inode, newname);
+		inode->nlink--;
+	}
+
+done:
 	// If the inode moved is a directory, update its . and .. entries.
 	// (update_dir_inode handles the case of inline directories.)
 	if (inode->type == T_DIR) {
 		update_dir_inode(inode, newdir);
 	}
+
 	return 0;
 }
 
@@ -1069,7 +1120,7 @@ int fs_unlink(const char *pathname)
 		return -ENOFOUND;
 	if (dentry_get_inode(dent)->type == T_DIR)
 		return -EINVTYPE;
-	free_dent(dent);
+	unlink_dent(dent);
 	return 0;
 }
 
@@ -1168,7 +1219,7 @@ int fs_rmdir(const char *pathname)
 	if (!dir_isempty(dentry_get_inode(dent)))
 		return -ENOTEMPTY;
 
-	free_dent(dent);
+	unlink_dent(dent);
 	parent->nlink--;
 	return 0;
 }
