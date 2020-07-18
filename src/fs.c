@@ -24,8 +24,8 @@
 #include <stdint.h>
 
 char *fs = NULL;
-struct superblock *sb;
-struct inode *inodes;
+struct hfs_superblock *sb;
+struct hfs_inode *inodes;
 char *bitmap;
 
 /*
@@ -37,7 +37,7 @@ char *bitmap;
  */
 static void init_superblock(size_t size)
 {
-	sb = (struct superblock *)fs;
+	sb = (struct hfs_superblock *)fs;
 
 	int total_blocks = size / BSIZE;
 	int inode_blocks = total_blocks * 0.03;
@@ -65,7 +65,7 @@ static void init_superblock(size_t size)
  */
 static inline void read_sb()
 {
-	sb = (struct superblock *)fs;
+	sb = (struct hfs_superblock *)fs;
 	inodes = BLKADDR(sb->inodestart);
 	bitmap = BLKADDR(sb->bitmapstart);
 }
@@ -119,18 +119,18 @@ static void free_data_block(uint32_t b)
  * and returns a pointer to that inode. Also initializes 
  * the type field.
  */
-static struct inode *alloc_inode(uint8_t type)
+static struct hfs_inode *alloc_inode(uint8_t type)
 {
 	/* Inode 0 is reserved! */
-	struct inode *inode;
+	struct hfs_inode *inode;
 	for (int i = 1; i < sb->ninodes; i++) {
 		inode = &inodes[i];
 		if (inode->type == T_UNUSED) {
-			memset((void *)inode, 0x0, sizeof(struct inode));
+			memset((void *)inode, 0x0, sizeof(struct hfs_inode));
 			inode->type = type;
 			// Enable inline by default for directories.
-			if (type == T_DIR) 
-				inode->flags |= I_INLINE;
+			// if (type == T_DIR) 
+			// 	inode->flags |= I_INLINE;
 			return inode;
 		}
 	}
@@ -143,7 +143,7 @@ static struct inode *alloc_inode(uint8_t type)
  * Do not call this function to remove a file!
  * Use unlink_dent instead which will call this function.
  */
-static int free_inode(struct inode *inode)
+static int free_inode(struct hfs_inode *inode)
 {
 	if (inode->nlink > 0)
 		return -1;
@@ -161,12 +161,23 @@ static int free_inode(struct inode *inode)
 /**
  * Find an unused dentry spot from a block.
  */
-static struct dentry *get_unused_dentry_from_block(uint32_t block_num)
+static struct hfs_dentry *alloc_dentry_from_block(uint32_t block_num,
+													uint16_t reclen)
 {
-	struct dentry_block *block = BLKADDR(block_num);
-	for (int j = 0; j < DENTPERBLK; j++) {
-		if (block->dents[j].inum == 0)
-			return &block->dents[j];
+	char *block = BLKADDR(block_num);
+	struct hfs_dentry *dent;
+	for_each_block_dent(dent, block) {
+		if (dent->reclen == 0) {  // end of dentry list
+			if ((char *)dent + reclen <= block + BSIZE) {
+				dent->reclen = reclen;
+				return dent;
+			} else {
+				break;
+			}
+		}
+		if (!dent->inum && dent->reclen >= reclen) {
+			return dent;
+		}
 	}
 	return NULL;
 }
@@ -174,14 +185,13 @@ static struct dentry *get_unused_dentry_from_block(uint32_t block_num)
 /*
  * Find an unused dentry spot from directory inode.
  */
-static struct dentry *get_unused_dentry(struct inode *dir)
+static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 {
-	struct dentry_block *block;
-	struct dentry *dent;
+	struct hfs_dentry *dent;
 	int unused = -1;
-	for (int i = 0; i < NBLOCKS - 1; i++) {
+	for (int i = 0; i < NBLOCKS; i++) {
 		if (dir->data.blocks[i]) {
-			dent = get_unused_dentry_from_block(dir->data.blocks[i]);
+			dent = alloc_dentry_from_block(dir->data.blocks[i], reclen);
 			if (dent)
 				return dent;
 		} else {
@@ -190,6 +200,7 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 		}
 	}
 
+	// No available blocks can be allocated for this inode
 	if (unused < 0)
 		return NULL;
 
@@ -200,18 +211,25 @@ static struct dentry *get_unused_dentry(struct inode *dir)
 	}
 
 	dir->size += BSIZE;  // increase directory size by one block
-	return (struct dentry *)BLKADDR(dir->data.blocks[unused]);
+	return (struct hfs_dentry *)BLKADDR(dir->data.blocks[unused]);
 }
 
 /**
  * Initialize a dentry with a name and link it to the inode.
  * As a result of this linkage, the inode's nlink is incremented.
  */
-static inline void init_regular_dent(struct dentry *dent, struct inode *inode,
-							const char *name)
+static inline void init_dentry(struct hfs_dentry *dent, 
+								struct hfs_inode *inode, const char *name)
 {
 	dent->inum = inum(inode);
+	dent->file_type = inode->type;
 	dentry_set_name(dent, name);
+
+	// reclen is only changed when:
+	//  - the dentry is first created, or when
+	//  - the dentry is being coalesced with an adjacent one
+	if (dent->reclen == 0)
+		dent->reclen = get_dentry_reclen_from_name(name);
 }
 
 /**
@@ -220,10 +238,12 @@ static inline void init_regular_dent(struct dentry *dent, struct inode *inode,
  * 
  * NOTE: Do NOT reset the name. The rename() system call relies on this
  * function not wiping out the name.
+ * 
+ * TODO: Coalescing adjacent free spaces
  */
-static void unlink_dent(struct dentry *dent)
+static void unlink_dent(struct hfs_dentry *dent)
 {
-	struct inode *inode = dentry_get_inode(dent);
+	struct hfs_inode *inode = dentry_get_inode(dent);
 
 	/* This check should be redundant. */
 	if (inode) {
@@ -237,38 +257,15 @@ static void unlink_dent(struct dentry *dent)
 }
 
 /**
- * Unlinks an inline dentry from its inode.
- * Decrement the inode's nlink count.
- * 
- * NOTE: Do NOT reset the name. The rename() system call relies on this
- * function not wiping out the name.
- * 
- * TODO: Coalesce adjacent free dentries.
- */
-static void unlink_inline_dent(struct dentry_inline *dent)
-{
-	struct inode *inode = inode_from_inum(dent->inum);
-
-	if (inode) {
-		inode->nlink--;
-		if (inode->nlink == 0) {
-			free_inode(inode);
-		}
-	}
-	dent->inum = 0;
-}
-
-/**
  * Create a new inline directory entry.
  */
-static struct dentry *new_inline_dentry(struct inode *dir,
-										struct inode *inode, const char *name)
+static struct hfs_dentry *alloc_inline_dentry(struct hfs_inode *dir, 
+											uint16_t reclen)
 {
-	struct dentry_inline *dent;
+	struct hfs_dentry *dent;
 	for_each_inline_dent(dent, dir) {
 		if (dent->inum != 0)
 			continue;
-		uint8_t reclen = get_inline_dent_reclen(name);	
 
 		// This dentry is not large enough
 		if (dent->reclen != 0 && dent->reclen < reclen)
@@ -277,18 +274,10 @@ static struct dentry *new_inline_dentry(struct inode *dir,
 		// This is a never-before-used dentry.
 		if (dent->reclen == 0) {
 			if (inline_dent_can_fit(dir, dent, reclen))
-				dent->reclen = reclen;
+				return dent;
 			else
 				break;
 		}
-
-		dent->inum = inum(inode);
-		inline_dentry_set_name(dent, name);
-
-		// INCREMENT INODE NLINK COUNT
-		inode->nlink++;
-
-		return (struct dentry *)dent;	// FIXME
 	}
 	return NULL;
 }
@@ -301,14 +290,12 @@ static struct dentry *new_inline_dentry(struct inode *dir,
  * regular entries and place them also in the block, which is then
  * attached to the inode.
  */
-static int dir_convert_inline_to_reg(struct inode *dir)
+static int convert_inline_directory(struct hfs_inode *dir)
 {
 	if (!inode_is_inline_dir(dir))
 		return -1;
 
-	pr_debug(":: Converting inline directory to regular directory.\n");
-
-	struct dentry *reg_dent;
+	struct hfs_dentry *dent;
 	uint32_t block = alloc_data_block();
 	if (!block) 
 		return -1;
@@ -318,22 +305,21 @@ static int dir_convert_inline_to_reg(struct inode *dir)
 	 * which would NOT increment the nlink count, which is what we want.
 	 */
 	// dot entry
-	reg_dent = get_unused_dentry_from_block(block);
-	init_regular_dent(reg_dent, dir, ".");
+	dent = alloc_dentry_from_block(block, get_dentry_reclen_from_name("."));
+	init_dentry(dent, dir, ".");
 	// dot dot entry
-	reg_dent = get_unused_dentry_from_block(block);
-	init_regular_dent(reg_dent, &inodes[dir->data.inline_dir.p_inum], "..");
+	dent = alloc_dentry_from_block(block, get_dentry_reclen_from_name(".."));
+	init_dentry(dent, &inodes[dir->data.inline_dir.p_inum], "..");
 
 	// Conver the inline directory entries and fill in the block.
-	struct dentry_inline *inline_dent;
+	struct hfs_dentry *inline_dent;
 	for_each_inline_dent(inline_dent, dir) {
 		if (!inline_dent->reclen)
 			break;  // end of list
 		if (!inline_dent->inum)
 			continue;  // empty item
-		reg_dent = get_unused_dentry_from_block(block);	
-		init_regular_dent(reg_dent, 
-						&inodes[inline_dent->inum], inline_dent->name);
+		dent = alloc_dentry_from_block(block, inline_dent->reclen);	
+		init_dentry(dent, &inodes[inline_dent->inum], inline_dent->name);
 	}
 
 	// Unset the inline bit in flag
@@ -350,22 +336,25 @@ static int dir_convert_inline_to_reg(struct inode *dir)
  * Find an unused dentry in dir and initialize it with
  * a name and an inode.
  */
-static struct dentry *new_dentry(struct inode *dir, 
-								struct inode *inode, const char *name)
+static struct hfs_dentry *new_dentry(struct hfs_inode *dir, 
+								struct hfs_inode *inode, const char *name)
 {
-	struct dentry *dent;
+	struct hfs_dentry *dent = NULL;
+	uint16_t reclen = get_dentry_reclen_from_name(name);
 	if (inode_is_inline_dir(dir)) {
-		if ((dent = new_inline_dentry(dir, inode, name)))
-			return dent; 
-		// If failed to allocate inline, convert directory inode
+		// If unable to allocate inline, convert directory inode
 		// to regular mode.
-		dir_convert_inline_to_reg(dir);
+		if (!(dent = alloc_inline_dentry(dir, reclen)))
+			convert_inline_directory(dir);
 	}
 
-	dent = get_unused_dentry(dir);	
-	if (!dent)
-		return NULL;
-	init_regular_dent(dent, inode, name);
+	// Not inline or inline allocation was unsuccessful
+	if (!dent) {
+		if (!(dent = alloc_dentry(dir, reclen)))
+			return NULL;
+	}
+
+	init_dentry(dent, inode, name);
 	inode->nlink++;
 	return dent;
 }
@@ -376,12 +365,12 @@ static struct dentry *new_dentry(struct inode *dir,
  * OR: If inline directories are enabled, simply use the first 
  * 4 bytes of inode.data to store the parent dir's inum.
  */
-static int init_dir_inode(struct inode *dir, struct inode *parent)
+static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 {
 	// Inline directory
 	if (inode_is_inline_dir(dir)) {
 		dir->data.inline_dir.p_inum = inum(parent);
-		dir->data.inline_dir.dent.inum = 0;
+		dir->data.inline_dir.dent_head.inum = 0;
 
 		// In a regular directory we would create the . and ..
 		// entries, thereby incrementing the two directories'
@@ -408,7 +397,7 @@ static int init_dir_inode(struct inode *dir, struct inode *parent)
  * Create a file/directory/device.
  * This is *not* the system call.
  */
-int do_creat(struct inode *dir, const char *name, uint8_t type)
+int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
 {
 	int ret;
 
@@ -420,7 +409,7 @@ int do_creat(struct inode *dir, const char *name, uint8_t type)
 		printf("creat: name too long.\n");
 		return -EINVNAME;
 	}
-	struct inode *inode = alloc_inode(type);
+	struct hfs_inode *inode = alloc_inode(type);
 	if (!inode) {
 		printf("Error: failed to allocate inode.\n");
 		return -EALLOC;
@@ -441,7 +430,7 @@ int do_creat(struct inode *dir, const char *name, uint8_t type)
  */
 static void init_rootdir(void)
 {
-	struct inode *rootino = alloc_inode(T_DIR);     
+	struct hfs_inode *rootino = alloc_inode(T_DIR);     
 	pr_debug("Root inum: %d\n", inum(rootino));
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
@@ -488,15 +477,19 @@ static int init_caches(void)
  * First check dent->name_hash to quickly dismiss non-matching dentries.
  * If name_hash is a match, then use strcmp on the full name to confirm.
  */
-static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
+static struct hfs_dentry *find_dent_in_block(uint32_t bnum, const char *name)
 {
-	struct dentry_block *block = (struct dentry_block*)BLKADDR(blocknum);
-	unsigned long name_hash = dentry_hash(name);
+	char *block = BLKADDR(bnum);
+	struct hfs_dentry *dent;
+	int namelen = strlen(name) + 1;
 
-	for (int i = 0; i < DENTPERBLK; i++) {
-		if (block->dents[i].inum && block->dents[i].name_hash == name_hash) {
-			if (strcmp(name, block->ext[i].name) == 0)
-				return &block->dents[i];
+	for_each_block_dent(dent, block) {
+		if (dent->reclen == 0)
+			break;
+		if (!dent->inum)
+			continue;
+		if (dent->namelen == namelen && strcmp(dent->name, name) == 0) {
+			return dent;		
 		}
 	}
 
@@ -506,9 +499,9 @@ static struct dentry *find_dent_in_block(uint32_t blocknum, const char *name)
 /**
  * Lookup a dentry in a given INLINE directory (inode).
  */
-static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
+static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, const char *name)
 {
-	struct dentry_inline *dent = NULL;
+	struct hfs_dentry *dent;
 	int namelen = strlen(name) + 1;
 
 	for_each_inline_dent(dent, dir) {
@@ -516,8 +509,8 @@ static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
 			break;
 		if (dent->inum == 0)
 			continue;
-		if (namelen == dent->namelen && strncmp(name, dent->name, namelen) == 0) {
-			return (struct dentry *)dent;	// FIXME
+		if (namelen == dent->namelen && strcmp(name, dent->name) == 0) {
+			return dent;
 		}	
 	}
 	return NULL;
@@ -528,7 +521,7 @@ static struct dentry *lookup_inline_dent(struct inode *dir, const char *name)
  * Helper function for lookup() but for now it's basically all
  * lookup() does.
  */
-static struct dentry *lookup_dent(struct inode *dir, const char *name)
+static struct hfs_dentry *lookup_dent(struct hfs_inode *dir, const char *name)
 {
 	// Inline directory lookup
 	if (inode_is_inline_dir(dir)) {
@@ -536,7 +529,7 @@ static struct dentry *lookup_dent(struct inode *dir, const char *name)
 	}
 
 	// Regular lookup
-	struct dentry *dent = NULL;
+	struct hfs_dentry *dent = NULL;
 	for (int i = 0; i < NBLOCKS - 1; i++) {
 		if (dir->data.blocks[i]) {
 			dent = find_dent_in_block(dir->data.blocks[i], name);
@@ -550,7 +543,7 @@ static struct dentry *lookup_dent(struct inode *dir, const char *name)
 /**
  * Update the . and .. entries in a directory inode.
  */
-static void update_dir_inode(struct inode *dir, struct inode *parent)
+static void update_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 {
 	if (dir->type != T_DIR)
 		return;
@@ -558,8 +551,8 @@ static void update_dir_inode(struct inode *dir, struct inode *parent)
 	if (inode_is_inline_dir(dir)) {
 		dir->data.inline_dir.p_inum = inum(parent);
 	} else {
-		struct dentry *dot = lookup_dent(dir, ".");
-		struct dentry *dotdot = lookup_dent(dir, "..");
+		struct hfs_dentry *dot = lookup_dent(dir, ".");
+		struct hfs_dentry *dotdot = lookup_dent(dir, "..");
 		dot->inum = inum(dir);
 		dotdot->inum = inum(parent);
 	}
@@ -646,10 +639,10 @@ static void get_filename(const char *pathname, char *name)
  * Even if pathname does not start with '/', the file system
  * will still use the root directory as a starting point.
  */
-static struct dentry *do_lookup(const char *pathname, struct inode **pi)
+static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 {
-	struct dentry *dent, *curr;
-	struct inode *prev;
+	struct hfs_dentry *dent, *curr;
+	struct hfs_inode *prev;
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
 
@@ -667,17 +660,7 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
 		}
 		if (!path_is_empty(pathname)) {
 			// Continue traversal, current directory becomes new prev.
-			// NOTE: The dentry returned can either be a regular one 
-			// or an inlined one. Therefore we check the directory type
-			// to determine which type of dentry to cast the pointer to.
-			// (Although technically unnecessary since inum is deliberately
-			// set to always be the first member of both structs)
-			if (inode_is_inline_dir(prev)) {
-				struct dentry_inline *inline_dent = (struct dentry_inline *)dent;
-				prev = inode_from_inum(inline_dent->inum);
-			} else {
-				prev = dentry_get_inode(dent);
-			}
+			prev = dentry_get_inode(dent);
 		}
 	}
 
@@ -691,7 +674,7 @@ static struct dentry *do_lookup(const char *pathname, struct inode **pi)
  * Regular lookup. Searches for the file specified by pathname
  * and return the resulting dentry or NULL if file isn't found.
  */
-struct dentry *lookup(const char *pathname)
+struct hfs_dentry *lookup(const char *pathname)
 {
 	return do_lookup(pathname, NULL);
 }
@@ -706,7 +689,7 @@ struct dentry *lookup(const char *pathname)
  * does not exist.
  * @return The dentry to the file in question.
  */
-struct dentry *dir_lookup(const char *pathname, struct inode **pi)
+struct hfs_dentry *dir_lookup(const char *pathname, struct hfs_inode **pi)
 {
 	return do_lookup(pathname, pi);
 }
@@ -734,8 +717,8 @@ static int get_open_fd(void)
 int fs_creat(const char *pathname)
 {
 	int fd;
-	struct dentry *dent;
-	struct inode *dir;
+	struct hfs_dentry *dent;
+	struct hfs_inode *dir;
 
 	if ((dent = dir_lookup(pathname, &dir)))
 		return -EEXISTS;
@@ -758,23 +741,14 @@ int fs_creat(const char *pathname)
  * @param newname	The new name for the dentry
  * @return			0 for success, -1 for failure
  */
-static int try_rename_dentry_in_place(struct inode *dir, struct dentry *dent,
-									const char *newname)
+static int try_rename_dentry(struct hfs_dentry *dent, const char *new_name)
 {
-	if (inode_is_inline_dir(dir)) {
-		struct dentry_inline *inline_dent = (struct dentry_inline *)dent;
-		uint8_t reclen = get_inline_dent_reclen(newname);
-		if (inline_dent->reclen >= reclen) {
-			inline_dentry_set_name(inline_dent, newname);
-			return 0;
-		} else {
-			return -1;
-		}
-	} else {
-		// Regular dentry: simply update name
-		dentry_set_name(dent, newname);
+	uint16_t reclen = get_dentry_reclen_from_name(new_name);
+	if (dent->reclen >= reclen) {
+		dentry_set_name(dent, new_name);
 		return 0;
 	}
+	return -1;
 }
 
 /**
@@ -803,9 +777,9 @@ static int try_rename_dentry_in_place(struct inode *dir, struct dentry *dent,
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
-	struct dentry *olddent = NULL, *newdent = NULL;
-	struct inode *olddir = NULL, *newdir = NULL;
-	struct inode *inode;
+	struct hfs_dentry *olddent = NULL, *newdent = NULL;
+	struct hfs_inode *olddir = NULL, *newdir = NULL;
+	struct hfs_inode *inode;
 
 	// Old path must exist; new path will be overwritten if exists,
 	// but new path's parent directory must be present.
@@ -818,12 +792,7 @@ int fs_rename(const char *oldpath, const char *newpath)
 	get_filename(newpath, newname);
 
 	// Obtain the inode
-	if (inode_is_inline_dir(olddir)) {
-		struct dentry_inline *inline_dent = (struct dentry_inline *)olddent;
-		inode = inode_from_inum(inline_dent->inum);
-	} else {
-		inode = dentry_get_inode(olddent);
-	}
+	inode = dentry_get_inode(olddent);
 
 	newdent = dir_lookup(newpath, &newdir);
 	if (!newdir)
@@ -835,7 +804,7 @@ int fs_rename(const char *oldpath, const char *newpath)
 		// Special case: rename is happening in place, then try to simply
 		// change the name by updating olddent.
 		if (newdir == olddir) {
-			if (try_rename_dentry_in_place(olddir, olddent, newname) == 0) {
+			if (try_rename_dentry(olddent, newname) == 0) {
 				goto done;  // in place update; everything done.
 			}
 		}
@@ -843,30 +812,17 @@ int fs_rename(const char *oldpath, const char *newpath)
 		// If destination file already exists, then we do not need to 
 		// do anything about the name, just unlink the old inode and 
 		// replace it with a new one.
-
 		if (newdent == olddent)
 			return -ESAME;
 
-		if (inode_is_inline_dir(newdir)) {
-			// Free the original entry at destination
-			struct dentry_inline *inline_dent = (struct dentry_inline *)newdent;
-			unlink_inline_dent(inline_dent);
-			inline_dent->inum = inum(inode);
-		} else {
-			// Free the original entry at destination
-			unlink_dent(newdent);
-			newdent->inum = olddent->inum;
-		}
+		unlink_dent(newdent);
+		newdent->inum = olddent->inum;
 	}
 
 	// Free the old entry. But since doing so will decrement the inode's nlink
 	// and might cause it to be deleted, we first increment it by 1.
 	inode->nlink++;
-	if (inode_is_inline_dir(olddir)) {
-		unlink_inline_dent((struct dentry_inline *)olddent);
-	} else {
-		unlink_dent(olddent);
-	}
+	unlink_dent(olddent);
 
 	if (!newdent) {
 		// Because we've already pre-incremented the nlink count, if
@@ -893,7 +849,7 @@ done:
 int fs_open(const char *pathname)
 {
 	int fd;
-	struct dentry *dent;
+	struct hfs_dentry *dent;
 
 	if ((fd = get_open_fd()) < 0)
 		return fd;	// ENOFD
@@ -955,7 +911,7 @@ unsigned int fs_lseek(int fd, unsigned int off)
  * @param alloc	TRUE if want block allocation if currently unused.
  * @return		The address corresponding to offset.
  */
-static char *get_off_addr(struct inode *file, unsigned int off, int alloc)
+static char *get_off_addr(struct hfs_inode *file, unsigned int off, int alloc)
 {
 	char *addr = NULL;
 	int b = off / BSIZE;
@@ -982,7 +938,7 @@ static char *get_off_addr(struct inode *file, unsigned int off, int alloc)
  * @return		The number of bytes read
  * 
  */
-unsigned int do_read(struct inode *file, unsigned int off, 
+unsigned int do_read(struct hfs_inode *file, unsigned int off, 
 					 void *buf, unsigned int n)
 {
 	int nread = 0;
@@ -1024,7 +980,7 @@ unsigned int fs_read(int fd, void *buf, unsigned int count)
 	if (!buf)
 		return -1;	
 
-	struct inode *file = dentry_get_inode(openfiles[fd].f_dentry);
+	struct hfs_inode *file = dentry_get_inode(openfiles[fd].f_dentry);
 	if (file->type != T_REG)
 		return -EINVTYPE;
 
@@ -1048,7 +1004,7 @@ bad_read:
  * @param n		Number of bytes left to be written
  * @return		The number of bytes written
  */
-unsigned int do_write(struct inode *file, unsigned int *off, 
+unsigned int do_write(struct hfs_inode *file, unsigned int *off, 
 					  void *buf, unsigned int n)
 {
 	int nwritten = 0;
@@ -1088,7 +1044,7 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 	if (!buf)
 		return -1;	
 
-	struct inode *file = dentry_get_inode(openfiles[fd].f_dentry);
+	struct hfs_inode *file = dentry_get_inode(openfiles[fd].f_dentry);
 	if (file->type != T_REG)
 		return -EINVTYPE;
 
@@ -1114,8 +1070,8 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
  */
 int fs_unlink(const char *pathname)
 {
-	struct inode *dir;
-	struct dentry *dent;
+	struct hfs_inode *dir;
+	struct hfs_dentry *dent;
 	if (!(dent = dir_lookup(pathname, &dir)) || !dir)
 		return -ENOFOUND;
 	if (dentry_get_inode(dent)->type == T_DIR)
@@ -1130,15 +1086,15 @@ int fs_unlink(const char *pathname)
  */
 int fs_link(const char *oldpath, const char *newpath)
 {
-	struct dentry *olddent = lookup(oldpath);
+	struct hfs_dentry *olddent = lookup(oldpath);
 	if (!olddent)
 		return -ENOFOUND;
-	struct inode *inode = dentry_get_inode(olddent);
+	struct hfs_inode *inode = dentry_get_inode(olddent);
 	if (inode->type == T_DIR)
 		return -EINVTYPE;
 
 	// make sure newpath doesn't already exist
-	struct inode *dir;
+	struct hfs_inode *dir;
 	if (dir_lookup(newpath, &dir))
 		return -EEXISTS;
 	if (!dir)
@@ -1158,7 +1114,7 @@ int fs_link(const char *oldpath, const char *newpath)
  */
 int fs_mkdir(const char *pathname)
 {
-	struct inode *dir;
+	struct hfs_inode *dir;
 
 	if (dir_lookup(pathname, &dir))
 		return -EEXISTS;
@@ -1177,14 +1133,16 @@ int fs_mkdir(const char *pathname)
  */
 static int dir_block_isempty(uint32_t b)
 {
-	struct dentry *dents = (struct dentry *)BLKADDR(b);
-	for (int i = 0; i < DENTPERBLK; i++) {
-		if (dents[i].inum) {
-			if (strcmp(dentry_get_name(&dents[i]), ".") == 0)
+	char *block = BLKADDR(b);
+	struct hfs_dentry *dent;
+	
+	for_each_block_dent(dent, block) {
+		if (dent->reclen == 0)
+			break;
+		if (dent->inum) {
+			if (strcmp(dentry_get_name(dent), ".") == 0
+					|| strcmp(dentry_get_name(dent), "..") == 0)
 				continue;
-			if (strcmp(dentry_get_name(&dents[i]), "..") == 0)
-				continue;
-			// valid dentry is neither . nor ..
 			return -1;
 		}
 	}
@@ -1194,12 +1152,22 @@ static int dir_block_isempty(uint32_t b)
 /**
  * Check if a directory is empty.
  */
-static int dir_isempty(struct inode *dir)
+static int dir_isempty(struct hfs_inode *dir)
 {
-	for (int i = 0; i < NBLOCKS; i++) {
-		if (dir->data.blocks[i]) {
-			if (!dir_block_isempty(dir->data.blocks[i]))
-				return -ENOTEMPTY;
+	if (inode_is_inline_dir(dir)) {
+		struct hfs_dentry *dent;
+		for_each_inline_dent(dent, dir) {
+			if (dent->reclen == 0)
+				break;
+			if (dent->inum)
+				return -1;
+		}
+	} else {
+		for (int i = 0; i < NBLOCKS; i++) {
+			if (dir->data.blocks[i]) {
+				if (!dir_block_isempty(dir->data.blocks[i]))
+					return -ENOTEMPTY;
+			}
 		}
 	}
 	return 0;
@@ -1210,8 +1178,8 @@ static int dir_isempty(struct inode *dir)
  */
 int fs_rmdir(const char *pathname)
 {
-	struct inode *parent;
-	struct dentry *dent = dir_lookup(pathname, &parent);
+	struct hfs_inode *parent;
+	struct hfs_dentry *dent = dir_lookup(pathname, &parent);
 	if (!dent || !parent)
 		return -ENOFOUND;
 	if (dentry_get_inode(dent)->type != T_DIR)
