@@ -13,7 +13,7 @@
 #define PRIMESIZE	31
 
 struct hashdata {
-	struct dentry *dent;
+	struct hfs_dentry *dent;
 };
 
 struct hashtable {
@@ -33,9 +33,9 @@ struct dentry_cache {
 
 int dentry_cache_init_all(void);
 void dentry_cache_free_all(void);
-struct dentry *dentry_cache_lookup(struct inode *dir, const char *name);
-int dentry_cache_insert(struct inode *dir, struct dentry *dent);
-int dentry_cache_remove(struct inode *dir, const char *name);
+struct hfs_dentry *dentry_cache_lookup(struct hfs_inode *dir, const char *name);
+int dentry_cache_insert(struct hfs_inode *dir, struct hfs_dentry *dent);
+int dentry_cache_remove(struct hfs_inode *dir, const char *name);
 
 void db_print_dentry_cache(void);
 

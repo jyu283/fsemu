@@ -18,7 +18,7 @@ static struct dentry_cache dcache;
 
 static void db_print_hashtable(struct hashtable *ht)
 {
-	struct dentry *dent;
+	struct hfs_dentry *dent;
 
 	printf("[");
 	for (int i = 0; i < PRIMESIZE; i++) {
