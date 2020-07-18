@@ -156,9 +156,33 @@ static inline struct dentry_ext *dentry_get_ext(struct dentry *dent)
 	return &block->ext[off];
 }
 
+/**
+ * Getter for dentry name.
+ */
 static inline char *dentry_get_name(struct dentry *dent)
 {
 	return (char *)&dentry_get_ext(dent)->name;
+}
+
+/**
+ * Setter for dentry name.
+ */
+static inline void dentry_set_name(struct dentry *dent, const char *name)
+{
+	unsigned int name_hash = dentry_hash(name);
+	dent->name_hash = name_hash;
+	strcpy(dentry_get_name(dent), name);
+}
+
+/**
+ * Setter for inline dentry name.
+ */
+static inline void inline_dentry_set_name(struct dentry_inline *dent, 
+											const char *name)
+{
+	uint8_t namelen = strlen(name) + 1;
+	dent->namelen = namelen;
+	strcpy(dent->name, name);
 }
 
 struct superblock {
