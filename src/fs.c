@@ -182,8 +182,8 @@ static struct hfs_dentry *alloc_dentry_from_block(uint32_t block_num,
 	return NULL;
 }
 
-/*
- * Find an unused dentry spot from directory inode.
+/**
+ * Allocates a dentry of reclen to the given directory inode.
  */
 static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 {
@@ -216,7 +216,6 @@ static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 
 /**
  * Initialize a dentry with a name and link it to the inode.
- * As a result of this linkage, the inode's nlink is incremented.
  */
 static inline void init_dentry(struct hfs_dentry *dent, 
 								struct hfs_inode *inode, const char *name)
@@ -395,7 +394,6 @@ static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 
 /*
  * Create a file/directory/device.
- * This is *not* the system call.
  */
 int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
 {
@@ -435,6 +433,9 @@ static void init_rootdir(void)
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
+/**
+ * Initializes file descriptor table.
+ */
 static void init_fd(void)
 {
 	for (int i = 0; i < MAXOPENFILES; i++) {
@@ -443,7 +444,7 @@ static void init_fd(void)
 	}
 }
 
-/*
+/**
  * Master function to initialize the file system.
  */
 static int init_fs(size_t size)
@@ -736,9 +737,6 @@ int fs_creat(const char *pathname)
  * where new path and old path are in the same directory, and
  * new path does not exist.
  * 
- * @param dir		The directory in which the update is to happen
- * @param dent		The dentry to try to update
- * @param newname	The new name for the dentry
  * @return			0 for success, -1 for failure
  */
 static int try_rename_dentry(struct hfs_dentry *dent, const char *new_name)
@@ -756,24 +754,6 @@ static int try_rename_dentry(struct hfs_dentry *dent, const char *new_name)
  * 
  * NOTE: Behaviour when renaming old path to an existing new path:
  *       NEW PATH SHOULD BE OVERWRITTEN.
- * 
- * rename() logic: 
- * IF: "newpath" does not exist:
- *    IF: newpath is in the same directory as old path,
- * 		  try to re-use old path's entry.
- * 			-> successful: We're done.
- * 			-> failed:     free the old entry and [make a new one].
- * 	  ELSE: new path is not in the same directory 
- * 		    free the old entry and [make a new one]
- * ELSE: "newpath" already exists:
- *    CHECK: newpath and old path cannot be same file!
- * 	  (Both inline and regular directories)
- * 		  update (overwrite) the destination dentry
- * 		  free the old entry
- * 
- * NOTE: [make a new one]:
- *    If at the end after freeing the old entry, newdent is NULL,
- *    that's the signal to [make a new one].
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
@@ -832,6 +812,7 @@ int fs_rename(const char *oldpath, const char *newpath)
 	}
 
 done:
+	// Last step:
 	// If the inode moved is a directory, update its . and .. entries.
 	// (update_dir_inode handles the case of inline directories.)
 	if (inode->type == T_DIR) {
@@ -1064,9 +1045,6 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 
 /**
  * Basic version of the POSIX unlink system call.
- * Again, no support yet for relative paths or even path 
- * interpretation. By default, we assume pathname to simply
- * be a filename in the root directory.
  */
 int fs_unlink(const char *pathname)
 {
@@ -1082,7 +1060,6 @@ int fs_unlink(const char *pathname)
 
 /**
  * Basic version of the POSIX link system call.
- * No support for sophisticated path lookup. Yada yada yada.
  */
 int fs_link(const char *oldpath, const char *newpath)
 {
