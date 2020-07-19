@@ -128,6 +128,7 @@ static struct hfs_inode *alloc_inode(uint8_t type)
 		if (inode->type == T_UNUSED) {
 			memset((void *)inode, 0x0, sizeof(struct hfs_inode));
 			inode->type = type;
+			sb->inode_used++;
 			// Enable inline by default for directories.
 			// if (type == T_DIR) 
 			// 	inode->flags |= I_INLINE;
@@ -155,6 +156,7 @@ static int free_inode(struct hfs_inode *inode)
 		}
 	}
 	inode->type = T_UNUSED;
+	sb->inode_used--;
 	return 0;
 }
 

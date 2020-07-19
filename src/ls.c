@@ -103,6 +103,7 @@ int ls(const char *pathname)
 	// For now only prints out the root's contents
 	ls_dir(src, name);
 	puts("");
+	pr_debug("Total inodes in use: %lu\n", sb->inode_used);
 	return 0;
 }
 
