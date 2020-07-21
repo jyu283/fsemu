@@ -129,9 +129,11 @@ static struct hfs_inode *alloc_inode(uint8_t type)
 			memset((void *)inode, 0x0, sizeof(struct hfs_inode));
 			inode->type = type;
 			sb->inode_used++;
+#ifdef _HFS_INLINE_DIRECTORY
 			// Enable inline by default for directories.
-			// if (type == T_DIR) 
-			// 	inode->flags |= I_INLINE;
+			if (type == T_DIR) 
+				inode->flags |= I_INLINE;
+#endif
 			return inode;
 		}
 	}
@@ -257,6 +259,7 @@ static void unlink_dent(struct hfs_dentry *dent)
 	dent->inum = 0;
 }
 
+#ifdef _HFS_INLINE_DIRECTORY
 /**
  * Create a new inline directory entry.
  */
@@ -332,6 +335,7 @@ static int convert_inline_directory(struct hfs_inode *dir)
 	dir->data.blocks[0] = block;
 	return 0;
 }
+#endif  // _HFS_INLINE_DIRECTORY
 
 /**
  * Find an unused dentry in dir and initialize it with
@@ -342,12 +346,14 @@ static struct hfs_dentry *new_dentry(struct hfs_inode *dir,
 {
 	struct hfs_dentry *dent = NULL;
 	uint16_t reclen = get_dentry_reclen_from_name(name);
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		// If unable to allocate inline, convert directory inode
 		// to regular mode.
 		if (!(dent = alloc_inline_dentry(dir, reclen)))
 			convert_inline_directory(dir);
 	}
+#endif  // _HFS_INLINE_DIRECTORY
 
 	// Not inline or inline allocation was unsuccessful
 	if (!dent) {
@@ -368,7 +374,7 @@ static struct hfs_dentry *new_dentry(struct hfs_inode *dir,
  */
 static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 {
-	// Inline directory
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		dir->data.inline_dir.p_inum = inum(parent);
 		dir->data.inline_dir.dent_head.inum = 0;
@@ -381,6 +387,7 @@ static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 
 		return 0;
 	}
+#endif  // _HFS_INLINE_DIRECTORY
 
 	// Regular directory
 	if (!new_dentry(dir, dir, ".")) {
@@ -499,6 +506,7 @@ static struct hfs_dentry *find_dent_in_block(uint32_t bnum, const char *name)
 	return NULL;
 }
 
+#ifdef _HFS_INLINE_DIRECTORY
 /**
  * Lookup a dentry in a given INLINE directory (inode).
  */
@@ -518,6 +526,7 @@ static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, const char *
 	}
 	return NULL;
 }
+#endif  // _HFS_INLINE_DIRECTORY
 
 /**
  * Lookup a dentry in a given directory (inode).
@@ -526,10 +535,12 @@ static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, const char *
  */
 static struct hfs_dentry *lookup_dent(struct hfs_inode *dir, const char *name)
 {
+#ifdef _HFS_INLINE_DIRECTORY
 	// Inline directory lookup
 	if (inode_is_inline_dir(dir)) {
 		return lookup_inline_dent(dir, name);
 	}
+#endif  // _HFS_INLINE_DIRECTORY
 
 	// Regular lookup
 	struct hfs_dentry *dent = NULL;
@@ -551,14 +562,17 @@ static void update_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 	if (dir->type != T_DIR)
 		return;
 
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		dir->data.inline_dir.p_inum = inum(parent);
-	} else {
-		struct hfs_dentry *dot = lookup_dent(dir, ".");
-		struct hfs_dentry *dotdot = lookup_dent(dir, "..");
-		dot->inum = inum(dir);
-		dotdot->inum = inum(parent);
+		return;
 	}
+#endif  // _HFS_INLINE_DIRECTORY
+
+	struct hfs_dentry *dot = lookup_dent(dir, ".");
+	struct hfs_dentry *dotdot = lookup_dent(dir, "..");
+	dot->inum = inum(dir);
+	dotdot->inum = inum(parent);
 }
 
 /**
@@ -1133,6 +1147,7 @@ static int dir_block_isempty(uint32_t b)
  */
 static int dir_isempty(struct hfs_inode *dir)
 {
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		struct hfs_dentry *dent;
 		for_each_inline_dent(dent, dir) {
@@ -1141,12 +1156,14 @@ static int dir_isempty(struct hfs_inode *dir)
 			if (dent->inum)
 				return -1;
 		}
-	} else {
-		for (int i = 0; i < NBLOCKS; i++) {
-			if (dir->data.blocks[i]) {
-				if (!dir_block_isempty(dir->data.blocks[i]))
-					return -ENOTEMPTY;
-			}
+		return 0;
+	} 
+#endif  // _HFS_INLINE_DIRECTORY
+
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (dir->data.blocks[i]) {
+			if (!dir_block_isempty(dir->data.blocks[i]))
+				return -ENOTEMPTY;
 		}
 	}
 	return 0;

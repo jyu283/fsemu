@@ -62,7 +62,7 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 	if (dir->type != T_DIR)
 		return;
 
-	// if inline directory
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		printf("[Inline directory]\n");
 		struct hfs_dentry *inline_dent;
@@ -77,13 +77,15 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 				print_dentry(inline_dent);
 			}
 		}
-	} else {
-		for (int i = 0; i < NBLOCKS; i++) {
-			if (dir->data.blocks[i]) {
-				print_dentry_block(dir->data.blocks[i]);
-			}
+		return;
+	} 
+#endif
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (dir->data.blocks[i]) {
+			print_dentry_block(dir->data.blocks[i]);
 		}
 	}
+	
 }
 
 int ls(const char *pathname)

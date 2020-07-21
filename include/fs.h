@@ -41,6 +41,7 @@
  * Uncomment the following macros to enable the corresponding features.
  */
 // #define DCACHE_ENABLED
+#define _HFS_INLINE_DIRECTORY
 
 /*
  * Simple File System layout diagram:
@@ -70,14 +71,18 @@ struct hfs_inode {
 	uint32_t		flags;
 	union {
 		uint32_t	blocks[NBLOCKS];
+#ifdef _HFS_INLINE_DIRECTORY
 		struct {
 			uint32_t				p_inum;
 			struct hfs_dentry		dent_head;
 		} inline_dir;
+#endif
 	} data;
 	uint8_t			type; 
 };
 
+
+#ifdef _HFS_INLINE_DIRECTORY
 // For loop to traverse through INLINE directories
 // d:	a hfs_dentry pointer
 // dir:	pointer to an INLINE directory inode
@@ -86,6 +91,20 @@ struct hfs_inode {
 		 (char *)d < (char *)&dir->data + \
 		 		sizeof(dir->data) - sizeof(struct hfs_dentry);\
 		 d = (struct hfs_dentry *)((char *)d + d->reclen))
+
+static inline bool inode_is_inline_dir(struct hfs_inode *inode)
+{
+	return (inode->flags & I_INLINE);
+}
+
+static inline bool inline_dent_can_fit(struct hfs_inode *dir, 
+										struct hfs_dentry *dent,
+										uint8_t reclen)
+{
+	return ((char *)dent + reclen < (char *)&dir->data + sizeof(dir->data));
+}
+#endif  // _HFS_INLINE_DIRECTORY
+
 
 // For loop to traverse through directory file block
 // d:	a hfs_dentry pointer
@@ -96,21 +115,9 @@ struct hfs_inode {
 		 d = (struct hfs_dentry *)((char *)d + d->reclen))
 
 
-static inline bool inode_is_inline_dir(struct hfs_inode *inode)
-{
-	return (inode->flags & I_INLINE);
-}
-
 static inline uint16_t get_dentry_reclen_from_name(const char *name)
 {
 	return (sizeof(struct hfs_dentry) + strlen(name) + 1);
-}
-
-static inline bool inline_dent_can_fit(struct hfs_inode *dir, 
-										struct hfs_dentry *dent,
-										uint8_t reclen)
-{
-	return ((char *)dent + reclen < (char *)&dir->data + sizeof(dir->data));
 }
 
 #define ROOTINO		1
