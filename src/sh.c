@@ -243,9 +243,7 @@ static void benchmark_handler()
 	int repcount = 1;
 	if (argc == 3)
 		repcount = atoi(argv[2]);
-	for (int i = 0; i < repcount; i++) {
-		benchmark_lookup((const char *)argv[1]);
-	}
+	benchmark_lookup((const char *)argv[1], repcount);
 }
 
 /**
