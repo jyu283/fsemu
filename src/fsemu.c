@@ -36,7 +36,7 @@ static inline void print_title(void)
 
 int main(int argc, char *argv[])
 {
-	if (argc != 1) {
+	if (argc != 1 && argc != 2) {
 		exit(0);
 	}
 
@@ -50,7 +50,19 @@ int main(int argc, char *argv[])
 	}
 
 	// test();
-	sh();
+	FILE *shell_fp;
+	if (argc == 2) {
+		if (!(shell_fp = fopen(argv[1], "r"))) {
+			perror("open");
+			exit(1);
+		}
+		printf("Starting shell in batch mode...\n");
+	} else {
+		shell_fp = stdin;
+		printf("Starting shell in interactive mode...\n");
+	}
+
+	sh(shell_fp);
 	
 	fs_unmount();
 	return 0;

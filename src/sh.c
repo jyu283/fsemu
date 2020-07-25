@@ -73,6 +73,7 @@ SYSCALL_DEFINE2(rename, const char *, const char *);
 SYSCALL_DEFINE2(lseek, int, unsigned int);
 SYSCALL_DEFINE3(read, int, void *, unsigned int);
 SYSCALL_DEFINE3(write, int, void *, unsigned int);
+SYSCALL_DEFINE0(reset);
 
 static int (*syscalls[])(void) = {
 	[SYS_mount]		sys_mount,
@@ -87,7 +88,8 @@ static int (*syscalls[])(void) = {
 	[SYS_lseek]		sys_lseek,
 	[SYS_read]		sys_read,
 	[SYS_write]		sys_write,
-	[SYS_rename]	sys_rename
+	[SYS_rename]	sys_rename,
+	[SYS_reset]		sys_reset,
 };
 
 static const char *prompt = "(fsemu) ";
@@ -123,6 +125,7 @@ static int get_sysnum(const char *name)
 	REGISTER_SYSCALL(lseek);
 	REGISTER_SYSCALL(read);
 	REGISTER_SYSCALL(write);
+	REGISTER_SYSCALL(reset);
 
 	return -1;
 }
@@ -198,6 +201,9 @@ static int syscall_handler(void)
 		check_argc(2);
 		SYSCALL_ARGPTR(0);
 		SYSCALL_ARGPTR(1);
+		break;
+	case SYS_reset:
+		check_argc(0);
 		break;
 	default:
 		ret = -ECMD;
@@ -344,13 +350,15 @@ int process(char *line)
 /**
  * Interactive shell
  */
-void sh(void)
+void sh(FILE *fp)
 {
 	char *line = NULL;
 	size_t len = 0;
 
 	print_prompt();
-	while (getline(&line, &len, stdin) != -1) {
+	while (getline(&line, &len, fp) != -1) {
+		if (fp != stdin)
+			printf("%s", line);
 		if (process(line) < 0)
 			break;
 		print_prompt();
