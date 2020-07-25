@@ -53,10 +53,8 @@ int benchmark_init_fs(const char *input_file)
 		line[strlen(line) - 1] = '\0';  // clear trailing \n
 		pathname = line + 2;
 		if (line[0] == 'D') {
-			// pr_debug("mkdir %s\n", pathname);
 			ret = fs_mkdir(pathname);
 		} else if (line[0] == 'F') {
-			// pr_debug("creat %s\n", pathname);
 			ret = fs_creat(pathname);
 		} else {
 			return -1;
