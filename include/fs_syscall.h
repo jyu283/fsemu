@@ -34,6 +34,7 @@ int fs_rename(const char *oldpath, const char *newpath);
 unsigned int fs_lseek(int fd, unsigned int off);
 unsigned int fs_read(int fd, void *buf, unsigned int count);
 unsigned int fs_write(int fd, void *buf, unsigned int count);
+int fs_reset(void);
 
 /* system call IDs */
 
@@ -50,6 +51,7 @@ unsigned int fs_write(int fd, void *buf, unsigned int count);
 #define SYS_read	10
 #define SYS_write	11
 #define SYS_rename	12
+#define SYS_reset   13
 
 // Debug functions
 // If around declarations because these functions should

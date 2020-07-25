@@ -38,6 +38,7 @@ char *bitmap;
 static void init_superblock(size_t size)
 {
 	sb = (struct hfs_superblock *)fs;
+	memset(sb, 0x0, BSIZE);
 
 	int total_blocks = size / BSIZE;
 	int inode_blocks = total_blocks * 0.03;
@@ -737,8 +738,10 @@ int fs_creat(const char *pathname)
 	struct hfs_dentry *dent;
 	struct hfs_inode *dir;
 
-	if ((dent = dir_lookup(pathname, &dir)))
+	if ((dent = dir_lookup(pathname, &dir))) {
+		pr_warn("%s already exists.\n", pathname);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
 
@@ -1088,8 +1091,10 @@ int fs_link(const char *oldpath, const char *newpath)
 
 	// make sure newpath doesn't already exist
 	struct hfs_inode *dir;
-	if (dir_lookup(newpath, &dir))
+	if (dir_lookup(newpath, &dir)) {
+		pr_warn("%s already exists.\n", newpath);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
 
@@ -1109,8 +1114,10 @@ int fs_mkdir(const char *pathname)
 {
 	struct hfs_inode *dir;
 
-	if (dir_lookup(pathname, &dir))
+	if (dir_lookup(pathname, &dir)) {
+		pr_warn("%s already exists.\n", pathname);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
 
@@ -1272,5 +1279,28 @@ int fs_unmount(void)
 #endif  // DCACHE_ENABLED
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
+	return 0;
+}
+
+/**
+ * Completely reset the file system.
+ */
+int fs_reset(void)
+{
+	if (!fs)
+		return -1;
+
+#ifdef DCACHE_ENABLED
+	dentry_cache_free_all();
+#endif  // DCACHE_ENABLED
+
+	unsigned long fs_size = sb->size * BSIZE;
+	memset(fs, 0x0, fs_size);
+	if (init_fs(fs_size) < 0)
+		return -1;
+	if (init_caches() < 0)
+		return -1;
+	init_fd();
+	read_sb();
 	return 0;
 }
