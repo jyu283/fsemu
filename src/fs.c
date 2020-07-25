@@ -43,7 +43,7 @@ static void init_superblock(size_t size)
 	int total_blocks = size / BSIZE;
 	int inode_blocks = total_blocks * 0.03;
 	sb->size = total_blocks;
-	pr_debug("Total blocks: %d.\n", total_blocks);
+	pr_info("Total blocks: %d.\n", total_blocks);
 
 	sb->inodestart = 1;
 	sb->ninodes = inode_blocks * INOPERBLK; 
@@ -439,7 +439,7 @@ int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
 static void init_rootdir(void)
 {
 	struct hfs_inode *rootino = alloc_inode(T_DIR);     
-	pr_debug("Root inum: %d\n", inum(rootino));
+	pr_info("Root inum: %d\n", inum(rootino));
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
@@ -462,7 +462,7 @@ static int init_fs(size_t size)
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
 
-	pr_debug("File system initialization completed!\n");
+	pr_info("File system initialization completed!\n");
 	return 0;
 }
 
@@ -1052,7 +1052,7 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 	unsigned int off = openfiles[fd].offset;
 	ret = do_write(file, &off, buf, count);
 	
-	pr_debug("write: %d bytes written.\n", ret);
+	pr_info("write: %d bytes written.\n", ret);
 
 	if (ret) {
 		openfiles[fd].offset = off;
@@ -1195,6 +1195,30 @@ int fs_rmdir(const char *pathname)
 	return 0;
 }
 
+/**
+ * Prints a list of enabled features.
+ */
+void print_features(void)
+{
+	pr_info(KBLD "\nENABLED FEATURES: \n" KNRM);
+
+#ifdef _HFS_INLINE_DIRECTORY
+	pr_info(KBLD KGRN "[ON]  " KNRM);
+#else
+	pr_info(KBLD KYEL "[OFF] " KNRM);
+#endif
+	pr_info("Inline directories\n");
+
+#ifdef _HFS_DCACHE
+	pr_info(KBLD KGRN "[ON]  " KNRM);
+#else
+	pr_info(KBLD KYEL "[OFF] " KNRM);
+#endif
+	pr_info("Dcache\n");
+
+	pr_info("\n");
+}
+
 /*
  * Allocates space for file system in memory.
  */
@@ -1262,7 +1286,8 @@ int fs_mount(unsigned long size)
 	read_sb();
 	close(fd); 
 
-	pr_debug("File system successfully mounted.\n");
+	pr_info("File system successfully mounted.\n");
+	print_features();
 	return 0;
 }
 
