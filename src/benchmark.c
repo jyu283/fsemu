@@ -100,7 +100,10 @@ int benchmark_lookup(const char *input_file, int repcount)
 
 	end = clock();
 	time = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
+
+	printf("\033[32;1m");
 	printf("Average running time per cycle: %.3fms.\n", time/repcount);
+	printf("\033[0m\n");
 
 	fclose(fp);
 	return 0;
