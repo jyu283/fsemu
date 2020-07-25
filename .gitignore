@@ -7,5 +7,5 @@
 **.txt
 **.data
 cachegrind*
+**.bench.sh
 **.out
-tools/*.sh
