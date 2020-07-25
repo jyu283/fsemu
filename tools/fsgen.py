@@ -68,25 +68,36 @@ class Inode():
         self.data = []
         self.isdir = True
 
+        names = []  # Keep track of the names generated for this directory
+
         # Create a number of regular files
         for _ in range(Inode.avg_dirsize - self.ndirs):
-            name = self.rand_name(random.randrange(Inode.avg_namelen - 4, 
+            while True:
+                name = self.rand_name(random.randrange(Inode.avg_namelen - 2, 
                                                 Inode.avg_namelen))
-            # apply file extension
-            name += "."
-            name += random.choice(file_extensions)
-            self.new_entry(name)
+                # apply file extension
+                name += "."
+                name += random.choice(file_extensions)
+                if name not in names:
+                    names.append(names)
+                    self.new_entry(name)
+                    break
 
         if self.level >= Inode.avg_depth:
             return
 
         # create a number (self.NSUBDIRS) of sub-directories
+        names.clear()
         for _ in range(self.ndirs):
-            name = self.rand_name(random.randrange(Inode.avg_namelen - 2,
-                                                    Inode.avg_namelen + 2))
-            name += "/"
-            dir = self.new_entry(name, isdir=True)
-            dir.populate()
+            while True:
+                name = self.rand_name(random.randrange(Inode.avg_namelen - 2,
+                                                        Inode.avg_namelen + 2))
+                name += "/"
+                if name not in names:
+                    names.append(names)
+                    dir = self.new_entry(name, isdir=True)
+                    dir.populate()
+                    break
 
         # Shuffle the directory so that directories won't always
         # be the last few dentries.
