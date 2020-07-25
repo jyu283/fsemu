@@ -15,24 +15,42 @@
 
 #define DEBUG   
 
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+#define KBLD  "\x1B[1m"
+
 #ifdef DEBUG
+#define pr_info(...) \
+	do {	\
+		fprintf(stderr, __VA_ARGS__);	\
+	} while (0)
+
 #define pr_debug(...) \
 	do {	\
+		fprintf(stderr, KBLD KYEL); \
 		fprintf(stderr, "DEBUG: (%s, %d): %s: ", 	\
 				__FILE__, __LINE__, __func__);	\
 		fprintf(stderr, __VA_ARGS__);	\
+		fprintf(stderr, KNRM); \
 	} while (0)
 
 #define pr_warn(...)\
     do {    \
-        fprintf(stderr, "\033[1;31m");  \
+        fprintf(stderr, KBLD KRED);  \
 		fprintf(stderr, "WARNING: (%s, %d): %s: ", 	\
 				__FILE__, __LINE__, __func__);	\
 		fprintf(stderr, __VA_ARGS__);   \
-        fprintf(stderr, "\033[0m;"); \
+        fprintf(stderr, KNRM); \
     } while (0)
 
 #else
+#define pr_info(...)	do { } while (0)
 #define pr_debug(...)   do { } while (0)
 #define pr_warn(...)    do { } while (0) 
 #endif
