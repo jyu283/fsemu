@@ -13,7 +13,7 @@
 
 #include <stdio.h>
 
-#define DEBUG   
+#define HFS_DEBUG   
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -25,7 +25,7 @@
 #define KWHT  "\x1B[37m"
 #define KBLD  "\x1B[1m"
 
-#ifdef DEBUG
+#ifdef HFS_DEBUG
 #define pr_info(...) \
 	do {	\
 		fprintf(stderr, __VA_ARGS__);	\
