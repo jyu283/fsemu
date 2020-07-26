@@ -11,10 +11,6 @@
 #include "util.h"
 #include "fsemu.h"
 
-#ifdef DCACHE_ENABLED
-#include "dentry_cache.h"
-#endif  // DCACHE_ENABLED
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -471,13 +467,6 @@ static int init_fs(size_t size)
  */
 static int init_caches(void)
 {
-#ifdef DCACHE_ENABLED
-	if (dentry_cache_init_all() < 0) {
-		printf("Error: failed to initialize dentry cache.\n");
-		return -1;
-	}
-#endif  // DCACHE_ENABLED
-
 	return 0;
 }
 
@@ -1305,9 +1294,6 @@ int fs_unmount(void)
 	if (!fs)
 		return -1;
 
-#ifdef DCACHE_ENABLED
-	dentry_cache_free_all();
-#endif  // DCACHE_ENABLED
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
 	return 0;
@@ -1320,10 +1306,6 @@ int fs_reset(void)
 {
 	if (!fs)
 		return -1;
-
-#ifdef DCACHE_ENABLED
-	dentry_cache_free_all();
-#endif  // DCACHE_ENABLED
 
 	unsigned long fs_size = sb->size * BSIZE;
 	memset(fs, 0x0, fs_size);

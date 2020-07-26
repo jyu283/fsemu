@@ -35,13 +35,9 @@
 #define INOPERBLK   (BSIZE / sizeof(struct hfs_inode))
 #define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
-/* In-memory caches:
- * DCACHE: Dentry cache. Stores contents of directories.
- * 
- * Uncomment the following macros to enable the corresponding features.
- */
-// #define DCACHE_ENABLED
+// Uncomment the following macros to enable the corresponding features.
 #define _HFS_INLINE_DIRECTORY
+#define _HFS_DCACHE
 
 /*
  * Simple File System layout diagram:
