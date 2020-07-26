@@ -659,7 +659,7 @@ static void get_filename(const char *pathname, char *name)
  */
 static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 {
-	struct hfs_dentry *dent, *curr;
+	struct hfs_dentry *dent = NULL, *curr;
 	struct hfs_inode *prev;
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
@@ -1260,9 +1260,15 @@ int fs_mount(unsigned long size)
 		fs_size = statbuf.st_size;
 	} else {
 		printf("Creating new file system...\n");
-		ftruncate(fd, 0);
+		if (ftruncate(fd, 0) < 0) {
+			perror("ftruncate");
+			return -1;
+		}
 		lseek(fd, size, SEEK_SET);
-		write(fd, "\0", 1);
+		if (write(fd, "\0", 1) < 0) {
+			perror("Reset image: write");
+			return -1;
+		}
 		fs_size = size;
 	}
 

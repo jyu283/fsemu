@@ -76,20 +76,20 @@ SYSCALL_DEFINE3(write, int, void *, unsigned int);
 SYSCALL_DEFINE0(reset);
 
 static int (*syscalls[])(void) = {
-	[SYS_mount]		sys_mount,
-	[SYS_unmount]	sys_unmount,
-	[SYS_open]		sys_open,
-	[SYS_close]		sys_close,
-	[SYS_unlink]	sys_unlink,
-	[SYS_link]		sys_link,
-	[SYS_mkdir]		sys_mkdir,
-	[SYS_rmdir]		sys_rmdir,
-	[SYS_creat]		sys_creat,
-	[SYS_lseek]		sys_lseek,
-	[SYS_read]		sys_read,
-	[SYS_write]		sys_write,
-	[SYS_rename]	sys_rename,
-	[SYS_reset]		sys_reset,
+	[SYS_mount]		= sys_mount,
+	[SYS_unmount]	= sys_unmount,
+	[SYS_open]		= sys_open,
+	[SYS_close]		= sys_close,
+	[SYS_unlink]	= sys_unlink,
+	[SYS_link]		= sys_link,
+	[SYS_mkdir]		= sys_mkdir,
+	[SYS_rmdir]		= sys_rmdir,
+	[SYS_creat]		= sys_creat,
+	[SYS_lseek]		= sys_lseek,
+	[SYS_read]		= sys_read,
+	[SYS_write]		= sys_write,
+	[SYS_rename]	= sys_rename,
+	[SYS_reset]		= sys_reset,
 };
 
 static const char *prompt = "(fsemu) ";
@@ -100,7 +100,8 @@ static const char *prompt = "(fsemu) ";
 static inline void print_prompt(void)
 {
 	fflush(stdout);
-	write(STDOUT_FILENO, prompt, PROMPTLEN);
+	printf("%s", prompt);
+	fflush(stdout);
 }
 
 /**
