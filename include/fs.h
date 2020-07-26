@@ -37,7 +37,7 @@
 
 // Uncomment the following macros to enable the corresponding features.
 #define _HFS_INLINE_DIRECTORY
-#define _HFS_DCACHE
+#define _HFS_DIRHASH
 
 /*
  * Simple File System layout diagram:
@@ -51,7 +51,8 @@
 #define NBLOCKS		15
 
 /* Inode flags */
-#define I_INLINE	0x00000001
+#define I_INLINE	0x00000001		/* Inline directory */
+#define I_DIRHASH	0x00000002		/* Dirhashed directory */
 
 struct hfs_dentry {
 	uint32_t	inum;

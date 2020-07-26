@@ -19,6 +19,12 @@
 #include <string.h>
 #include <stdint.h>
 
+
+/* Optional add-on features. */
+#ifdef _HFS_DIRHASH
+#include "dirhash.h"
+#endif
+
 char *fs = NULL;
 struct hfs_superblock *sb;
 struct hfs_inode *inodes;
@@ -467,7 +473,20 @@ static int init_fs(size_t size)
  */
 static int init_caches(void)
 {
+#ifdef _HFS_DIRHASH
+	hfs_dirhash_init();
+#endif
 	return 0;
+}
+
+/**
+ * Free in-memory hashes.
+ */
+static void free_caches(void)
+{
+#ifdef _HFS_DIRHASH
+	hfs_dirhash_free();
+#endif
 }
 
 /**
@@ -1198,12 +1217,12 @@ void print_features(void)
 #endif
 	pr_info("Inline directories\n");
 
-#ifdef _HFS_DCACHE
+#ifdef _HFS_DIRHASH
 	pr_info(KBLD KGRN "[ON]  " KNRM);
 #else
 	pr_info(KBLD KYEL "[OFF] " KNRM);
 #endif
-	pr_info("Dcache\n");
+	pr_info("Dirhash\n");
 
 	pr_info("\n");
 }
@@ -1294,6 +1313,7 @@ int fs_unmount(void)
 	if (!fs)
 		return -1;
 
+	free_caches();
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
 	return 0;
