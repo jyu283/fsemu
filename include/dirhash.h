@@ -44,5 +44,10 @@ struct hfs_dirhash {
 extern struct hfs_dirhash *dirhash;
 
 int hfs_dirhash_init(void);
+void hfs_dirhash_free(void);
+
+#ifdef HFS_DEBUG
+void hfs_dirhash_dump(void);
+#endif
 
 #endif  // __DIRHASH_H__
