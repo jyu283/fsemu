@@ -73,8 +73,7 @@ class Inode():
         # Create a number of regular files
         for _ in range(Inode.avg_dirsize - self.ndirs):
             while True:
-                name = self.rand_name(random.randrange(Inode.avg_namelen - 2, 
-                                                Inode.avg_namelen))
+                name = self.rand_name(Inode.avg_namelen)
                 # apply file extension
                 name += "."
                 name += random.choice(file_extensions)
@@ -90,8 +89,7 @@ class Inode():
         names.clear()
         for _ in range(self.ndirs):
             while True:
-                name = self.rand_name(random.randrange(Inode.avg_namelen - 2,
-                                                        Inode.avg_namelen + 2))
+                name = self.rand_name(Inode.avg_namelen)
                 name += "/"
                 if name not in names:
                     names.append(names)
@@ -100,8 +98,8 @@ class Inode():
                     break
 
         # Shuffle the directory so that directories won't always
-        # be the last few dentries.
-        random.shuffle(self.data)
+        # be the last few dentries. (Disabled for consistency)
+        # random.shuffle(self.data)
 
     def print_dir(self, prefix=""):
         if not self.isdir:
