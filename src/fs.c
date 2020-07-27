@@ -30,6 +30,20 @@ struct hfs_superblock *sb;
 struct hfs_inode *inodes;
 char *bitmap;
 
+#ifdef _HFS_INLINE_DIRECTORY
+static inline void inode_set_inline_flag(struct hfs_inode *inode)
+{
+	inode->flags |= I_INLINE;
+	sb->inline_inodes++;
+}
+
+static inline void inode_unset_inline_flag(struct hfs_inode *inode)
+{
+	inode->flags &= (~I_INLINE);
+	sb->inline_inodes--;
+}
+#endif
+
 /*
  * Calculate the positions of each region of the file system.
  *  - Superblock is the very first block in the file system.
@@ -134,8 +148,12 @@ static struct hfs_inode *alloc_inode(uint8_t type)
 			sb->inode_used++;
 #ifdef _HFS_INLINE_DIRECTORY
 			// Enable inline by default for directories.
-			if (type == T_DIR) 
-				inode->flags |= I_INLINE;
+			if (type == T_DIR) {
+				inode_set_inline_flag(inode);
+				sb->ndirectories++;
+			} else if (type == T_REG) {
+				sb->nfiles++;
+			}
 #endif
 			return inode;
 		}
@@ -160,6 +178,12 @@ static int free_inode(struct hfs_inode *inode)
 			inode->data.blocks[i] = 0;
 		}
 	}
+
+	if (inode->type == T_DIR)
+		sb->ndirectories--;
+	else if (inode->type == T_REG)
+		sb->nfiles--;
+
 	inode->type = T_UNUSED;
 	sb->inode_used--;
 	return 0;
@@ -330,7 +354,7 @@ static int convert_inline_directory(struct hfs_inode *dir)
 	}
 
 	// Unset the inline bit in flag
-	dir->flags &= ~I_INLINE;
+	inode_unset_inline_flag(dir);
 
 	// Wipe out the inode.data area, and set the first block
 	// Thus dawns a new age for this directory inode.

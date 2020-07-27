@@ -143,6 +143,9 @@ struct hfs_superblock {
 	uint64_t		size;       // total size in blocks
 	uint64_t		ninodes;    // number of inodes
 	uint64_t		inode_used;	// number of inodes in use
+	uint64_t		inline_inodes;	// number of inline inodes
+	uint64_t		ndirectories;	// number of directories
+	uint64_t		nfiles;			// number of files
 	uint64_t		datastart;	// data start block
 	uint64_t		nblocks;    // number of data blocks
 	uint64_t		inodestart;	// start of inodes
