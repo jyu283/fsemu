@@ -21,17 +21,19 @@ static char *type_names[] = {
 
 static inline void print_inode(struct hfs_inode *inode, const char *name)
 {
-	printf("%s %-3d %-16s %-6d inum=%d",
+	printf("%s %-3d %-16s %-6d inum=%d  ",
 		type_names[inode->type], inode->nlink, name,
 		inode->size, inum(inode));
 }
 
-static inline void print_dentry(struct hfs_dentry *dent)
+static inline void print_dentry(struct hfs_dentry *dent, char *off_start)
 {
 	struct hfs_inode *inode = dentry_get_inode(dent);
+	unsigned long off = (char *)dent - off_start;
+
 	print_inode(inode, dentry_get_name(dent));
-	printf("  rlen=%-3d nlen=%-3d off=%lu\n", dent->reclen, 
-					dent->namelen, (unsigned long)dent % BSIZE);
+	printf("rlen=%-3d nlen=%-3d off=%lu-%lu\n", dent->reclen, 
+						dent->namelen, off, off + dent->reclen);
 }
 
 /**
@@ -49,7 +51,7 @@ static inline void print_dentry_block(uint32_t block_num)
 		if (dent->reclen == 0)
 			break;
 		if (dent->inum)
-			print_dentry(dent);
+			print_dentry(dent, block);
 	}
 }
 
@@ -74,7 +76,7 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 			if (!inline_dent->reclen)
 				break;
 			if (inline_dent->inum) {
-				print_dentry(inline_dent);
+				print_dentry(inline_dent, (char *)&dir->data.inline_dir);
 			}
 		}
 		return;
@@ -106,6 +108,9 @@ int ls(const char *pathname)
 	ls_dir(src, name);
 	puts("");
 	pr_info("Total inodes in use: %lu\n", sb->inode_used);
+	pr_info("Directories: %lu total. Files: %lu total.\n", 
+							sb->ndirectories, sb->nfiles);
+	pr_info("Total inline inodes: %lu\n", sb->inline_inodes);
 	return 0;
 }
 
@@ -124,3 +129,76 @@ void lsfd(void)
 	}
 	puts("");
 }
+
+#ifdef HFS_DEBUG
+
+static int do_show_inline(struct hfs_inode *dir)
+{
+	if (inode_is_inline_dir(dir)) {
+		ls_dir(dir, "#####");
+		return 0;
+	} else {
+		struct hfs_inode *inode;
+		struct hfs_dentry *dent;
+		char *block;
+		for (int i = 0; i < NBLOCKS; i++) {
+			if (dir->data.blocks[i] == 0)
+				continue;
+			block = BLKADDR(dir->data.blocks[i]);
+			for_each_block_dent(dent, block) {
+				if (!dent->reclen)
+					break;
+				if (dent->inum == 0)
+					continue;
+				inode = inode_from_inum(dent->inum);
+				if (inode->type != T_DIR)
+					continue;
+				if (do_show_inline(inode) == 0)
+					return 0;
+			}	
+		}
+	}
+	return -1;
+}
+
+/**
+ * Debug function:
+ * Show inline directories.
+ */
+void show_inline(void)
+{
+	do_show_inline(get_root_inode());
+}
+
+static int do_show_regular(struct hfs_inode *dir)
+{
+	if (!inode_is_inline_dir(dir)) {
+		ls_dir(dir, "#####");
+		return 0;
+	} else {
+		struct hfs_inode *inode;
+		struct hfs_dentry *dent;
+		for_each_inline_dent(dent, dir) {
+			if (!dent->reclen)
+				break;
+			if (dent->inum == 0)
+				continue;
+			inode = inode_from_inum(dent->inum); 
+			if (inode->type != T_DIR)
+				continue;
+			if (do_show_regular(inode) == 0)
+				return 0;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Debug function:
+ * Show regular directories.
+ */
+void show_regular(void)
+{
+	do_show_regular(get_root_inode());
+}
+#endif  // HFS_DEBUG

@@ -223,6 +223,22 @@ out:
 }
 
 /**
+ * Handles the show_inline command.
+ */
+static void show_inline_handler()
+{
+	show_inline();
+}
+
+/**
+ * Handles the show_regular command.
+ */
+static void show_regular_handler()
+{
+	show_regular();
+}
+
+/**
  * Handles the load [FILE] command.
  */
 static void load_handler()
@@ -305,6 +321,12 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "benchmark") == 0) {
 		benchmark_handler();
+		return 0;
+	} else if (strcmp(argv[0], "show_inline") == 0) {
+		show_inline_handler();
+		return 0;
+	} else if (strcmp(argv[0], "show_regular") == 0) {
+		show_regular_handler();
 		return 0;
 	}
 

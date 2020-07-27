@@ -19,4 +19,9 @@ int benchmark_init_fs(const char *input_file);
 int benchmark_lookup(const char *input_file, int repcount);
 void benchmark(const char *input_file);
 
+#ifdef HFS_DEBUG
+void show_inline(void);
+void show_regular(void);
+#endif  // HFS_DEBUG
+
 #endif  // __UTIL_H__
