@@ -17,9 +17,9 @@ import random
 
 # List of possible file extensions
 file_extensions = [
-    "txt", "doc", "docx", "png", "jpeg", "mp4", "mkv", "avi", "c", "cpp", "h",
-    "py", "out", "md", "pdf", "odt", "html", "ppt", "pptx", "xls", "xlsx", 
-    "bmp", "class", "java", "exe", "mov", "psd", "tar", "rar", "tif", "wav"
+    "txt", "doc", "docx", "png", "jpeg", "mp4", "mkv", "avi", "cpp",
+    "out", "md", "pdf", "odt", "html", "ppt", "pptx", "xls", "xlsx", 
+    "bmp", "java", "exe", "mov", "psd", "tar", "rar", "tif", "wav"
 ]
 
 # It pains me immensely to see inode and dentry with capitalised I's and D's,
