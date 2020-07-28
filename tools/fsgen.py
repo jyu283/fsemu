@@ -82,9 +82,6 @@ class Inode():
                     self.new_entry(name)
                     break
 
-        if self.level >= Inode.avg_depth:
-            return
-
         # create a number (self.NSUBDIRS) of sub-directories
         names.clear()
         for _ in range(self.ndirs):
@@ -94,7 +91,8 @@ class Inode():
                 if name not in names:
                     names.append(names)
                     dir = self.new_entry(name, isdir=True)
-                    dir.populate()
+                    if self.level < Inode.avg_depth:
+                        dir.populate()
                     break
 
         # Shuffle the directory so that directories won't always
