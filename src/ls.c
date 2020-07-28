@@ -131,9 +131,9 @@ void lsfd(void)
 }
 
 #ifdef HFS_DEBUG
-
 static int do_show_inline(struct hfs_inode *dir)
 {
+#ifdef _HFS_INLINE_DIRECTORY
 	if (inode_is_inline_dir(dir)) {
 		ls_dir(dir, "#####");
 		return 0;
@@ -150,6 +150,9 @@ static int do_show_inline(struct hfs_inode *dir)
 					break;
 				if (dent->inum == 0)
 					continue;
+				if (strcmp(dent->name, ".") == 0 || 
+						strcmp(dent->name, "..") == 0)
+					continue;
 				inode = inode_from_inum(dent->inum);
 				if (inode->type != T_DIR)
 					continue;
@@ -158,6 +161,7 @@ static int do_show_inline(struct hfs_inode *dir)
 			}	
 		}
 	}
+#endif
 	return -1;
 }
 
@@ -172,6 +176,7 @@ void show_inline(void)
 
 static int do_show_regular(struct hfs_inode *dir)
 {
+#ifdef _HFS_INLINE_DIRECTORY
 	if (!inode_is_inline_dir(dir)) {
 		ls_dir(dir, "#####");
 		return 0;
@@ -190,6 +195,7 @@ static int do_show_regular(struct hfs_inode *dir)
 				return 0;
 		}
 	}
+#endif
 	return -1;
 }
 
@@ -201,4 +207,5 @@ void show_regular(void)
 {
 	do_show_regular(get_root_inode());
 }
+
 #endif  // HFS_DEBUG
