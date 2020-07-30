@@ -36,7 +36,7 @@
 #define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
 // Uncomment the following macros to enable the corresponding features.
-#define _HFS_INLINE_DIRECTORY
+// #define _HFS_INLINE_DIRECTORY
 #define _HFS_DIRHASH
 
 /*
@@ -65,9 +65,30 @@ struct hfs_dentry {
 struct hfs_inode {
 	uint32_t		nlink;
 	uint32_t		size;
+	uint8_t			type;
 	uint32_t		flags;
 	union {
 		uint32_t	blocks[NBLOCKS];
+
+/**
+ * Dirhashed directory: If dirhash is enabled for a directory,
+ * there can only be one block full of directory entries.
+ * After the single block address, the dirhash_rec field is used
+ * to identify the dirhash table for this directory.
+ */
+#ifdef _HFS_DIRHASH
+		struct {
+			uint32_t	block;
+			uint32_t	seqno;
+			uint16_t	id;
+		} dirhash_rec;
+#endif
+
+/**
+ * Inline directory mode: The 60-byte hfs_inode.data field
+ * is used to directory store directory entries, as well as
+ * the parent directory's inum.
+ */
 #ifdef _HFS_INLINE_DIRECTORY
 		struct {
 			uint32_t				p_inum;
@@ -75,7 +96,6 @@ struct hfs_inode {
 		} inline_dir;
 #endif
 	} data;
-	uint8_t			type; 
 };
 
 
