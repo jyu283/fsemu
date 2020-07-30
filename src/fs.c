@@ -131,6 +131,31 @@ static void free_data_block(uint32_t b)
 	bm[byte] &= ~(1 << bit);
 }
 
+/**
+ * Initialize inode, set type and flags.
+ */
+static void init_inode(struct hfs_inode *inode, uint8_t type)
+{
+	memset((void *)inode, 0x0, sizeof(struct hfs_inode));
+	inode->type = type;
+	sb->inode_used++;
+	// Enable inline by default for directories.
+	if (type == T_DIR) {
+		sb->ndirectories++;
+#ifdef _HFS_INLINE_DIRECTORY
+		inode_set_inline_flag(inode);
+#endif
+#ifdef _HFS_DIRHASH
+		// Enable dirhash if and only if the directory
+		// is not set to inline mode.
+		if (!(inode->flags & I_INLINE))
+			inode->flags |= I_DIRHASH;
+#endif
+	} else if (type == T_REG) {
+		sb->nfiles++;
+	}
+}
+
 /*
  * Locates an unused (T_UNUSED) inode from the inode pool
  * and returns a pointer to that inode. Also initializes 
@@ -143,18 +168,7 @@ static struct hfs_inode *alloc_inode(uint8_t type)
 	for (int i = 1; i < sb->ninodes; i++) {
 		inode = &inodes[i];
 		if (inode->type == T_UNUSED) {
-			memset((void *)inode, 0x0, sizeof(struct hfs_inode));
-			inode->type = type;
-			sb->inode_used++;
-#ifdef _HFS_INLINE_DIRECTORY
-			// Enable inline by default for directories.
-			if (type == T_DIR) {
-				inode_set_inline_flag(inode);
-				sb->ndirectories++;
-			} else if (type == T_REG) {
-				sb->nfiles++;
-			}
-#endif
+			init_inode(inode, type);
 			return inode;
 		}
 	}
@@ -215,6 +229,11 @@ static struct hfs_dentry *alloc_dentry_from_block(uint32_t block_num,
 
 /**
  * Allocates a dentry of reclen to the given directory inode.
+ * 
+ * _HFS_DIRHASH:
+ * If, as a result of this allocation, the size of this directory grows
+ * beyond one block, then we need to unset the I_DIRHASH flag to indicate
+ * that this directory will NO LONGER use dirhash.
  */
 static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 {
@@ -236,6 +255,12 @@ static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 		return NULL;
 
 	// allocate new data block to unused address
+#ifdef _HFS_DIRHASH
+	// If we are allocating ALL BUT the VERY FIRST block, then 
+	// we need to disable dirhash for this directory.
+	if (dir->data.blocks[0])
+		dir->flags &= ~I_DIRHASH;
+#endif 
 	if ((dir->data.blocks[unused] = alloc_data_block()) == 0) {
 		printf("Error: data allocation failed.\n");
 		return NULL;
@@ -356,6 +381,10 @@ static int convert_inline_directory(struct hfs_inode *dir)
 	// Unset the inline bit in flag
 	inode_unset_inline_flag(dir);
 
+#ifdef _HFS_DIRHASH
+	dir->flags |= I_DIRHASH;
+#endif
+
 	// Wipe out the inode.data area, and set the first block
 	// Thus dawns a new age for this directory inode.
 	memset(&dir->data, 0x0, sizeof(dir->data));
@@ -390,6 +419,12 @@ static struct hfs_dentry *new_dentry(struct hfs_inode *dir,
 
 	init_dentry(dent, inode, name);
 	inode->nlink++;
+
+#ifdef _HFS_DIRHASH
+	if (dir->flags & I_DIRHASH)
+		hfs_dirhash_put(dir, dent);
+#endif
+
 	return dent;
 }
 
@@ -488,6 +523,8 @@ static int init_fs(size_t size)
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
 
+	pr_debug("Inode size: %ld\n", sizeof(struct hfs_inode));
+	pr_debug("Dentry size: %ld\n", sizeof(struct hfs_dentry));
 	pr_info("File system initialization completed!\n");
 	return 0;
 }
@@ -1310,15 +1347,15 @@ int fs_mount(unsigned long size)
 		return -1;
 	}
 
+	// Initialize in-memory caches
+	if (init_caches() < 0)
+		return -1;
+
 	// If file system is newly created, initialise everything.
 	if (fs_is_new) {
 		if (init_fs(fs_size) < 0)
 			return -1;
 	}
-
-	// Initialize DCACHE if enabled.
-	if (init_caches() < 0)
-		return -1;
 
 	init_fd();
 	read_sb();
