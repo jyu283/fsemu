@@ -238,6 +238,11 @@ static void show_regular_handler()
 	show_regular();
 }
 
+static void dirhash_dump_handler()
+{
+	hfs_dirhash_dump();
+}
+
 /**
  * Handles the load [FILE] command.
  */
@@ -327,6 +332,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "show_regular") == 0) {
 		show_regular_handler();
+		return 0;
+	} else if (strcmp(argv[0], "dirhash_dump") == 0) {
+		dirhash_dump_handler();
 		return 0;
 	}
 
