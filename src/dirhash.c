@@ -71,12 +71,14 @@ static inline struct hfs_dirhash_table *lru_get_last(void)
 static struct hfs_dirhash_table *inode_get_valid_dirhash(struct hfs_inode *dir)
 {
     int id;
-    if (id = dir->data.dirhash_rec.id) {
+    if ((id = dir->data.dirhash_rec.id)) {
         struct hfs_dirhash_table *dt = hfs_dirhash_get_table(id);
-        return ((dt->seqno == dir->data.dirhash_rec.seqno)
-                && (dt->inum == inum(dir)));
+        if ((dt->seqno == dir->data.dirhash_rec.seqno)
+                    && (dt->inum == inum(dir))) {
+            return dt;
+        }
     }
-    return 0;
+    return NULL; 
 }
 
 /**
@@ -216,6 +218,42 @@ int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent)
 }
 
 /**
+ * Lookup a name in a specified hash table.
+ * Probe linearly if a collision marked.
+ */
+static struct hfs_dirhash_entry *do_lookup(struct hfs_dirhash_table *dt,
+                                           const char *name)
+{
+    int namelen = strlen(name) + 1;
+    int h = fnv_hash(name, namelen);  // index hash
+    int h2 = name_hash(name, namelen);   // name check hash
+
+    lru_touch(dt);
+
+    struct hfs_dirhash_entry *ent = &dt->data[h];
+    while (ent->seqno == dt->seqno && ent->name_hash != h2) {
+        // advance index or wrap around to zero 
+        h = (h < HFS_DIRHASH_TABLESIZE - 1) ? (h + 1) : 0;
+        ent = &dt->data[h];
+    }
+
+    return (ent->name_hash == h2) ? ent : NULL;
+}
+
+/**
+ * Dirhash lookup.
+ */
+struct hfs_dirhash_entry *hfs_dirhash_lookup(struct hfs_inode *dir,
+                                             const char *name)
+{
+    struct hfs_dirhash_table *dt;
+    if (!(dt = inode_get_valid_dirhash(dir)))
+        dt = dir_alloc_table(dir);
+
+    return do_lookup(dt, name);
+}
+
+/**
  * Form a doubly-linked list from all the dirhash tables.
  */
 static void init_dirhash_tables(void)
@@ -280,9 +318,7 @@ static void dirhash_table_dump(struct hfs_dirhash_table *dt)
         if (dt->data[i].seqno != dt->seqno)
             continue;
         if (dt->data[i].dent)
-            printf("[%d|%.16s] ", dt->data[i].seqno, dt->data[i].dent->name);
-        else
-            printf("[%d|----] ", dt->data[i].seqno);
+            printf("[%d|%.16s] ", i, dt->data[i].dent->name);
     }
 }
 

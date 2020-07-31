@@ -44,6 +44,13 @@ int hfs_dirhash_init(void);
 void hfs_dirhash_free(void);
 int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent);
 int hfs_dirhash_put_dir(struct hfs_inode *dir);
-struct hfs_dirhash_entry *hfs_dirhash_lookup(int id, const char *name);
+
+struct hfs_dirhash_entry *hfs_dirhash_lookup(struct hfs_inode *dir, 
+                                             const char *name);
+
+static inline int inode_dirhash_enabled(struct hfs_inode *dir)
+{
+    return (dir->flags & I_DIRHASH);
+}
 
 #endif  // __DIRHASH_H__
