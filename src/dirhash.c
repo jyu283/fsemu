@@ -220,6 +220,14 @@ int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent)
 /**
  * Lookup a name in a specified hash table.
  * Probe linearly if a collision marked.
+ * 
+ * Checking if an entry is valid:
+ *   - If the sequence number is current;
+ *   - If the name_hash matches;
+ *   - If there is a non-NULL dentry pointer
+ *      (a NULL dentry pointer is a deleted entry, so we should not
+ *      immediately assume there is no match but proceed with a linear
+ *      probe.)
  */
 static struct hfs_dirhash_entry *do_lookup(struct hfs_dirhash_table *dt,
                                            const char *name)
@@ -231,7 +239,7 @@ static struct hfs_dirhash_entry *do_lookup(struct hfs_dirhash_table *dt,
     lru_touch(dt);
 
     struct hfs_dirhash_entry *ent = &dt->data[h];
-    while (ent->seqno == dt->seqno && ent->name_hash != h2) {
+    while (ent->seqno == dt->seqno && ent->name_hash != h2 && ent->dent) {
         // advance index or wrap around to zero 
         h = (h < HFS_DIRHASH_TABLESIZE - 1) ? (h + 1) : 0;
         ent = &dt->data[h];
@@ -254,6 +262,26 @@ struct hfs_dirhash_entry *hfs_dirhash_lookup(struct hfs_inode *dir,
 }
 
 /**
+ * Dirhash delete.
+ * 
+ * Mark an entry as deleted by setting its dentry pointer to NULL.
+ * 
+ * NOTE: This function, as well as all other dirhash functions,
+ * should be called after the main on-disk operations are completed.
+ */
+void hfs_dirhash_delete(struct hfs_inode *dir, const char *name)
+{
+    struct hfs_dirhash_table *dt;
+    struct hfs_dirhash_entry *ent;
+    if (!(dt = inode_get_valid_dirhash(dir))) {
+        dt = dir_alloc_table(dir);
+    } else {
+        if ((ent = do_lookup(dt, name)))
+            ent->dent = NULL;
+    }
+}
+
+/**
  * Form a doubly-linked list from all the dirhash tables.
  */
 static void init_dirhash_tables(void)
@@ -267,13 +295,9 @@ static void init_dirhash_tables(void)
     struct hfs_dirhash_table *curr, *next;
     for (int i = 0; i < HFS_DIRHASH_SIZE - 1; i++) {
         curr = hfs_dirhash_get_table(i);
-        next = hfs_dirhash_get_table(i + 1);
-        curr->next = next;
+        next = hfs_dirhash_get_table(i + 1); curr->next = next;
         next->prev = curr;
     }
-#ifdef HFS_DEBUG
-    // hfs_dirhash_dump();
-#endif
 }
 
 /**
