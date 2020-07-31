@@ -61,15 +61,22 @@ static inline struct hfs_dirhash_table *lru_get_last(void)
 }
 
 /**
- * Verify that a dirhash table is still valid for a directory.
- * i.e. 1) The sequence numbers match
- *      2) The table and inode are marked for each other.
+ * Return a verified dirhash table attached to the specified directory inode,
+ * NULL if there isn't one.
+ * Criteria: 
+ *    0) There is a dirhash table ID number. 
+ *    1) The sequence numbers match
+ *    2) The table and inode are marked for each other.
  */
-static inline int dirhash_table_is_valid(struct hfs_dirhash_table *dt,
-                                         struct hfs_inode *dir)
+static struct hfs_dirhash_table *inode_get_valid_dirhash(struct hfs_inode *dir)
 {
-    return (dt->seqno == dir->data.dirhash_rec.seqno 
-            && dt->inum == inum(dir));
+    int id;
+    if (id = dir->data.dirhash_rec.id) {
+        struct hfs_dirhash_table *dt = hfs_dirhash_get_table(id);
+        return ((dt->seqno == dir->data.dirhash_rec.seqno)
+                && (dt->inum == inum(dir)));
+    }
+    return 0;
 }
 
 /**
@@ -198,16 +205,8 @@ int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent)
     int id;
     int dir_inum = inum(dir);
 
-    struct hfs_dirhash_table *dt = NULL;
-
-    // If inode indicates that it has a table, check if it's still valid.
-    if ((id = dir->data.dirhash_rec.id)) {
-        dt = hfs_dirhash_get_table(id);
-        if (!dirhash_table_is_valid(dt, dir))
-            dt = NULL;
-    }
-
-    if (!dt) {
+    struct hfs_dirhash_table *dt;
+    if (!(dt = inode_get_valid_dirhash(dir))) {
         // NOTE: dir_alloc_table will have put dent into cache
         dt = dir_alloc_table(dir);
     } else {
