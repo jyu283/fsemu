@@ -728,7 +728,7 @@ static void get_filename(const char *pathname, char *name)
  */
 static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 {
-	struct hfs_dentry *dent = NULL, *curr;
+	struct hfs_dentry *dent = NULL;
 	struct hfs_inode *prev;
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
@@ -737,7 +737,19 @@ static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
-		if (!(dent = lookup_dent(prev, component))) {
+#ifdef _HFS_DIRHASH
+		if (inode_dirhash_enabled(prev)) {
+			struct hfs_dirhash_entry *ent;
+			if ((ent = hfs_dirhash_lookup(prev, component)))
+				dent = ent->dent;
+			else
+				dent = NULL;
+		}
+		goto check;
+#endif
+		dent = lookup_dent(prev, component);
+check:
+		if (!dent) {
 			// If lookup failed on the last component, then fill
 			// in the pi field. Otherwise, set pi field to NULL
 			// to indicate that lookup failed along the way.
