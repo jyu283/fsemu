@@ -13,6 +13,11 @@
 
 struct hfs_dirhash *dirhash;
 
+#ifdef HFS_DEBUG
+static int put_conflict_cnt = 0, put_no_conf_cnt = 0;
+static int lookup_miss_cnt = 0, lookup_hit_cnt = 0;
+#endif
+
 static inline struct hfs_dirhash_table *hfs_dirhash_get_table(int id)
 {
     return &dirhash->tables[id];
@@ -131,8 +136,12 @@ static uint32_t name_hash(const char *name, int namelen)
  */
 static void put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
 {
+#ifdef HFS_DEBUG
+    int conflict = 0;
+#endif
+
     int h = fnv_hash(dent->name, dent->namelen);
-    uint64_t h2 = name_hash(dent->name, dent->namelen);
+    uint32_t h2 = name_hash(dent->name, dent->namelen);
     struct hfs_dirhash_entry *ent = &dt->data[h];
 
     // If at index h there is already an entry belonging to this directory,
@@ -143,7 +152,20 @@ static void put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
         // wrap around if h reaches the end of the table 
         h = (h < HFS_DIRHASH_TABLESIZE - 1) ? (h + 1) : 0;
         ent = &dt->data[h];
+#ifdef HFS_DEBUG
+        conflict++;
+#endif
     }
+
+#ifdef HFS_DEBUG
+    if (conflict) {
+        // pr_warn("Conflict %d times!\n", conflict);
+        put_conflict_cnt++;
+    } else {
+        // pr_debug("Conflict free!\n");
+        put_no_conf_cnt++;
+    }
+#endif
 
     // Fill in the entry
     ent->seqno = dt->seqno;
@@ -211,8 +233,14 @@ int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent)
     if (!(dt = inode_get_valid_dirhash(dir))) {
         // NOTE: dir_alloc_table will have put dent into cache
         dt = dir_alloc_table(dir);
+#ifdef HFS_DEBUG
+        lookup_miss_cnt++;
+#endif
     } else {
         put_dentry(dt, dent);
+#ifdef HFS_DEBUG
+        lookup_hit_cnt++;
+#endif
     }
     return 0;
 }
@@ -255,8 +283,16 @@ struct hfs_dirhash_entry *hfs_dirhash_lookup(struct hfs_inode *dir,
                                              const char *name)
 {
     struct hfs_dirhash_table *dt;
-    if (!(dt = inode_get_valid_dirhash(dir)))
+    if (!(dt = inode_get_valid_dirhash(dir))) {
         dt = dir_alloc_table(dir);
+#ifdef HFS_DEBUG
+        lookup_miss_cnt++;
+#endif
+    } else {
+#ifdef HFS_DEBUG
+        lookup_hit_cnt++;
+#endif
+    }
 
     return do_lookup(dt, name);
 }
@@ -356,8 +392,20 @@ void hfs_dirhash_dump(void)
 
     struct hfs_dirhash_table *dt;
     for (dt = dirhash->head; dt; dt = dt->next) {
-        printf("DIRHASH #%d ", hfs_dirhash_get_id(dt));
+        printf(KBLD KBLU "\nDIRHASH #%d [%d]" KNRM, 
+                hfs_dirhash_get_id(dt), dt->inum);
         dirhash_table_dump((struct hfs_dirhash_table *)dt);
         puts("");
     }
+
+#ifdef HFS_DEBUG
+    printf("Total conflicted puts:    %d\n", put_conflict_cnt);
+    printf("Total conflict free puts: %d\n", put_no_conf_cnt);
+    printf("Total lookup miss count:  %d\n", lookup_miss_cnt);
+    printf("Total lookup hit count:   %d\n", lookup_hit_cnt);
+    put_conflict_cnt = 0;
+    put_no_conf_cnt = 0;
+    lookup_miss_cnt = 0;
+    lookup_hit_cnt = 0;
+#endif
 }
