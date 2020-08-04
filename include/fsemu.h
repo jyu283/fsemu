@@ -36,8 +36,8 @@
 		fprintf(stderr, KBLD KYEL); \
 		fprintf(stderr, "DEBUG: (%s, %d): %s: ", 	\
 				__FILE__, __LINE__, __func__);	\
-		fprintf(stderr, __VA_ARGS__);	\
 		fprintf(stderr, KNRM); \
+		fprintf(stderr, __VA_ARGS__);	\
 	} while (0)
 
 #define pr_warn(...)\
@@ -45,8 +45,8 @@
         fprintf(stderr, KBLD KRED);  \
 		fprintf(stderr, "WARNING: (%s, %d): %s: ", 	\
 				__FILE__, __LINE__, __func__);	\
-		fprintf(stderr, __VA_ARGS__);   \
         fprintf(stderr, KNRM); \
+		fprintf(stderr, __VA_ARGS__);   \
     } while (0)
 
 #else
