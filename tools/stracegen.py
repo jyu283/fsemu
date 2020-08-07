@@ -23,10 +23,25 @@ sys_calls = [
 ]
 
 
+#
+# Trim a line in the raw strace file
+def process_line(line):
+	line = line.replace("(", " ").replace(")", " ").replace(",", "")
+	return line
+
+#
+# IMPORTANT: strace must be generated with the -f flag, which records
+# the PID of the process that generated the system call. This function
+# will attempt to skip the first space-separated component in the given
+# line, and extract the next component as the system call name.
+#
 def parse_strace(strace):
 	line = strace.readline()
 	while line:
-		print(line, end="")
+		instr = process_line(line).split()
+		if instr[1] in sys_calls:
+			print(instr)
+			print(line)
 		line = strace.readline()
 
 
@@ -47,8 +62,6 @@ def strace_gen(in_file, out_file=None):
 	if saved_stdout:
 		sys.stdout.close()
 		sys.stdout = saved_stdout
-
-	in_file.close()
 
 
 def main():
