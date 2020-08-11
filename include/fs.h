@@ -48,10 +48,11 @@
 #define T_REG		1
 #define T_DIR		2
 #define T_DEV		3
+#define T_SYM		4
 #define NBLOCKS		15
 
 /* Inode flags */
-#define I_INLINE	0x00000001		/* Inline directory */
+#define I_INLINE	0x00000001		/* Inline directory/symlink */
 #define I_DIRHASH	0x00000002		/* Dirhashed directory */
 
 struct hfs_dentry {
@@ -61,6 +62,8 @@ struct hfs_dentry {
 	uint8_t		file_type;
 	char		name[0];
 };
+
+#define INODE_BLOCKS_SIZE	(sizeof(uint32_t) * NBLOCKS)
 
 struct hfs_inode {
 	uint32_t		nlink;
@@ -91,6 +94,11 @@ struct hfs_inode {
 			uint32_t				p_inum;
 			struct hfs_dentry		dent_head;
 		} inline_dir;
+
+		/**
+		 * Inline symbolic link path.
+		 */
+		char		symlink_path[INODE_BLOCKS_SIZE]; 
 	} data;
 };
 
