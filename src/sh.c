@@ -74,6 +74,7 @@ SYSCALL_DEFINE2(lseek, int, unsigned int);
 SYSCALL_DEFINE3(read, int, void *, unsigned int);
 SYSCALL_DEFINE3(write, int, void *, unsigned int);
 SYSCALL_DEFINE0(reset);
+SYSCALL_DEFINE2(symlink, const char *, const char *);
 
 static int (*syscalls[])(void) = {
 	[SYS_mount]		= sys_mount,
@@ -90,6 +91,7 @@ static int (*syscalls[])(void) = {
 	[SYS_write]		= sys_write,
 	[SYS_rename]	= sys_rename,
 	[SYS_reset]		= sys_reset,
+	[SYS_symlink]	= sys_symlink,
 };
 
 static const char *prompt = "(fsemu) ";
@@ -127,6 +129,7 @@ static int get_sysnum(const char *name)
 	REGISTER_SYSCALL(read);
 	REGISTER_SYSCALL(write);
 	REGISTER_SYSCALL(reset);
+	REGISTER_SYSCALL(symlink);
 
 	return -1;
 }
@@ -206,6 +209,11 @@ static int syscall_handler(void)
 	case SYS_reset:
 		check_argc(0);
 		break;
+	case SYS_symlink:
+		check_argc(2);
+		SYSCALL_ARGPTR(0);
+		SYSCALL_ARGPTR(1);
+		break;
 	default:
 		ret = -ECMD;
 		goto out;
@@ -241,6 +249,18 @@ static void show_regular_handler()
 static void dirhash_dump_handler()
 {
 	hfs_dirhash_dump();
+}
+
+/**
+ * Handles readl command (readlink)
+ */
+static void readl_handler()
+{
+	if (argc != 2) {
+		printf("Usage: readl [LINK]\n");
+		return;
+	}
+	readl(argv[1]);
 }
 
 /**
@@ -335,6 +355,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "dirhash_dump") == 0) {
 		dirhash_dump_handler();
+		return 0;
+	} else if (strcmp(argv[0], "readl") == 0) {
+		readl_handler();
 		return 0;
 	}
 
