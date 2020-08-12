@@ -15,6 +15,7 @@ int ls(const char *pathname);
 void lsfd(void);
 int cat(const char *pathname);
 int readl(const char *pathname);
+int loadf(const char *ospath, const char *emupath);
 
 int benchmark_init_fs(const char *input_file);
 int benchmark_lookup(const char *input_file, int repcount);

@@ -270,6 +270,18 @@ static void readl_handler()
 }
 
 /**
+ * Handles "loadf [ospath] [emupath]" command.
+ */
+static void loadf_handler()
+{
+	if (argc != 3) {
+		printf("Usage: loadf [ospath] [emupath]\n");
+		return;
+	}
+	loadf(argv[1], argv[2]);
+}
+
+/**
  * Handles the load [FILE] command.
  */
 static void load_handler()
@@ -364,6 +376,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "readl") == 0) {
 		readl_handler();
+		return 0;
+	} else if (strcmp(argv[0], "loadf") == 0) {
+		loadf_handler();
 		return 0;
 	}
 
