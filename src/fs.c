@@ -1136,8 +1136,6 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 	unsigned int off = openfiles[fd].offset;
 	ret = do_write(file, &off, buf, count);
 	
-	pr_info("write: %d bytes written.\n", ret);
-
 	if (ret) {
 		openfiles[fd].offset = off;
 		if (off > file->size)
