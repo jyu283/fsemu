@@ -29,6 +29,30 @@ static inline int hfs_dirhash_get_id(struct hfs_dirhash_table *dt)
 }
 
 /**
+ * Move an LRU entry to the tail end.
+ */
+static inline void lru_demote(struct hfs_dirhash_table *dt)
+{
+    struct hfs_dirhash_table *prev = dt->prev;
+    struct hfs_dirhash_table *next = dt->next;
+
+    if (!next)
+        return;
+
+    next->prev = prev;
+    if (!prev) {
+        dirhash->head = next;
+    } else {
+        prev->next = next;
+    }
+
+    dt->next = NULL;
+    dt->prev = dirhash->tail;
+    dirhash->tail->next = dt;
+    dirhash->tail = dt;
+}
+
+/**
  * "Touch" an LRU entry and promoting it to be the head.
  */
 static inline void lru_touch(struct hfs_dirhash_table *dt)
@@ -134,7 +158,7 @@ static uint32_t name_hash(const char *name, int namelen)
  * are hashed to the same index and also have the same name_hash value.
  * Unlikely, very unlikely, but should be considered.
  */
-static void put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
+static int put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
 {
 #ifdef HFS_DEBUG
     int conflict = 0;
@@ -143,6 +167,11 @@ static void put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
     int h = fnv_hash(dent->name, dent->namelen);
     uint32_t h2 = name_hash(dent->name, dent->namelen);
     struct hfs_dirhash_entry *ent = &dt->data[h];
+
+    if (dt->capacity >= HFS_DIRHASH_TABLESIZE * 0.85) {
+        lru_demote(dt);
+        return -1;
+    }
 
     // If at index h there is already an entry belonging to this directory,
     // we use linear probing to find an available spot
@@ -173,7 +202,10 @@ static void put_dentry(struct hfs_dirhash_table *dt, struct hfs_dentry *dent)
     ent->dent = dent;
     ent->next_dirhash = NULL;
 
+    dt->capacity++;
     lru_touch(dt);
+
+    return 0;
 }
 
 /**
@@ -188,7 +220,9 @@ static void put_directory(struct hfs_dirhash_table *dt, struct hfs_inode *dir)
             break;
         if (dent->inum == 0)
             continue;
-        put_dentry(dt, dent);
+        if (put_dentry(dt, dent) != 0) {
+            inode_disable_dirhash(dir);
+        }
     }
 }
 
@@ -237,7 +271,10 @@ int hfs_dirhash_put(struct hfs_inode *dir, struct hfs_dentry *dent)
         lookup_miss_cnt++;
 #endif
     } else {
-        put_dentry(dt, dent);
+        if (put_dentry(dt, dent) != 0) {
+            inode_disable_dirhash(dir);
+            return -1;
+        }
 #ifdef HFS_DEBUG
         lookup_hit_cnt++;
 #endif
@@ -266,13 +303,14 @@ static struct hfs_dirhash_entry *do_lookup(struct hfs_dirhash_table *dt,
 
     lru_touch(dt);
 
+    // Shouldn't have to worry about infinite loop anymore because
+    // we keep track of capacity in table header.
     struct hfs_dirhash_entry *ent = &dt->data[h];
     while (ent->seqno == dt->seqno && ent->name_hash != h2 && ent->dent) {
         // advance index or wrap around to zero 
         h = (h < HFS_DIRHASH_TABLESIZE - 1) ? (h + 1) : 0;
         ent = &dt->data[h];
     }
-
     return (ent->name_hash == h2) ? ent : NULL;
 }
 

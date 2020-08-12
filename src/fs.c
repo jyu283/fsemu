@@ -466,32 +466,27 @@ static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 /*
  * Create a file/directory/device.
  */
-int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
+struct hfs_dentry *do_creat(struct hfs_inode *dir, 
+							const char *name, uint8_t type)
 {
 	int ret;
+	struct hfs_dentry *dent;
+	struct hfs_inode *inode;
 
-	if (dir->type != T_DIR) {
-		printf("Error: invalid inode type.\n");
-		return -EINVTYPE;
-	}
-	if (strlen(name) + 1 > DENTRYNAMELEN) {
-		printf("creat: name too long.\n");
-		return -EINVNAME;
-	}
-	struct hfs_inode *inode = alloc_inode(type);
-	if (!inode) {
-		printf("Error: failed to allocate inode.\n");
-		return -EALLOC;
-	}
-	if (!new_dentry(dir, inode, name)) {
-		printf("Error: failed to create dentry %s.\n", name);
-		return -EALLOC;
-	}
+	inode = alloc_inode(type);
+	if (!inode)
+		return NULL;
+
+	if (!(dent = new_dentry(dir, inode, name)))
+		return NULL;
+
 	if (type == T_DIR) {
-		if ((ret = init_dir_inode(inode, dir)) < 0)
-			return ret;
+		if ((ret = init_dir_inode(inode, dir)) < 0) {
+			unlink_dent(dent);
+			return NULL;
+		}
 	}
-	return 0;
+	return dent;
 }
 
 /*
@@ -737,18 +732,18 @@ static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
+		if (prev->flags & I_DIRHASH) {
 #ifdef _HFS_DIRHASH
-		if (inode_dirhash_enabled(prev)) {
 			struct hfs_dirhash_entry *ent;
 			if ((ent = hfs_dirhash_lookup(prev, component)))
 				dent = ent->dent;
 			else
 				dent = NULL;
-		}
-		goto check;
 #endif
-		dent = lookup_dent(prev, component);
-check:
+		} else {
+			dent = lookup_dent(prev, component);
+		}
+
 		if (!dent) {
 			// If lookup failed on the last component, then fill
 			// in the pi field. Otherwise, set pi field to NULL
@@ -815,7 +810,7 @@ static int get_open_fd(void)
  */
 int fs_creat(const char *pathname)
 {
-	int fd;
+	int fd, ret;
 	struct hfs_dentry *dent;
 	struct hfs_inode *dir;
 
@@ -825,11 +820,19 @@ int fs_creat(const char *pathname)
 	}
 	if (!dir)
 		return -ENOFOUND;
+	if (dir->type != T_DIR)
+		return -EINVTYPE;
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(pathname, filename);
 
-	return do_creat(dir, filename, T_REG);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(do_creat(dir, filename, T_REG)))
+		return -EALLOC;
+	
+	return 0;
 }
 
 /**
@@ -1201,11 +1204,19 @@ int fs_mkdir(const char *pathname)
 	}
 	if (!dir)
 		return -ENOFOUND;
+	if (dir->type != T_DIR)
+		return -EINVTYPE;
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(pathname, filename);
 
-	return do_creat(dir, filename, T_DIR);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(do_creat(dir, filename, T_DIR)))
+		return -EALLOC;
+
+	return 0;
 }
 
 /**
@@ -1274,6 +1285,110 @@ int fs_rmdir(const char *pathname)
 	unlink_dent(dent);
 	parent->nlink--;
 	return 0;
+}
+
+/**
+ * Set the target of a symbolic link (i.e. write the path name).
+ * We always treat the symlink inode as a brand-new inode because of
+ * the assumption that a symlink CANNOT be updated.
+ */
+static int symlink_set_target(struct hfs_inode *symlink, const char *target)
+{
+	memset(symlink->data.symlink_path, 0, INODE_BLOCKS_SIZE);
+
+	/* Attempt inline link */
+	int linklen = strlen(target) + 1;
+	if (linklen <= INODE_BLOCKS_SIZE) {
+		strncpy(symlink->data.symlink_path, target, linklen);
+		symlink->flags |= I_INLINE;
+		return 0;
+	}
+
+	/* Regular symlink, stored in a block */
+	if (!(symlink->data.blocks[0] = alloc_data_block()))
+		return -EALLOC;
+	char *path = BLKADDR(symlink->data.blocks[0]);
+	strncpy(path, target, linklen);
+	return 0;
+}
+
+/**
+ * Basic version of the POSIX symlink() system call.
+ * 
+ * fs_symlink() creates a symbolic link named linkpath which
+ * contains the string target.
+ * 
+ * Note that a symbolic link CANNOT be edited; it can only be replaced
+ * by a new symbolic link. So when setting the path in the symlink,
+ * we can safely assume that there will be no pre-existing data.
+ */
+int fs_symlink(const char *target, const char *linkpath)
+{
+	int ret;
+	struct hfs_dentry *dent;
+	struct hfs_inode *dir = NULL, *symlink;
+
+	if (strlen(target) > BSIZE)
+		return -EINVAL;
+
+	if ((do_lookup(linkpath, &dir)))
+		return -EEXISTS;
+	if (!dir)
+		return -ENOFOUND;
+	
+	symlink = alloc_inode(T_SYM);
+	if (!symlink)
+		return -EALLOC;
+
+	char filename[DENTRYNAMELEN];
+	get_filename(linkpath, filename);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(dent = do_creat(dir, filename, T_SYM)))
+		return -EALLOC;
+
+	symlink = inode_from_inum(dent->inum);
+	if ((ret = symlink_set_target(symlink, target)) < 0)
+		unlink_dent(dent);
+
+	return ret;
+}
+
+/**
+ * Read the path stored in a symbolic link.
+ * @param pathname	the path to the symbolic link in question.
+ * @param buf		user-provided buffer wherein to store the result.
+ * @param bufsize	size of the user-provided buffer.
+ * @return			the number of bytes stored in buf.
+ */
+int fs_readlink(const char *pathname, char *buf, size_t bufsize)
+{
+	struct hfs_dentry *dent;
+	struct hfs_inode *symlink;
+	char *link;
+	int nbytes = 0, linklen;
+
+	if (!buf || bufsize == 0)
+		return -EINVAL;
+	if (!(dent = lookup(pathname)))
+		return -ENOFOUND;
+	
+	symlink = inode_from_inum(dent->inum);
+	if (symlink->type != T_SYM)
+		return -EINVTYPE;
+
+	/* Determine where link is stored (inline vs block) */
+	link = (symlink->flags & I_INLINE) ?
+			(char *)symlink->data.symlink_path : 
+			BLKADDR(symlink->data.blocks[0]);
+	linklen = strlen(link);
+
+	/* If link is longer than buffer size, truncate copy size */
+	nbytes = (linklen < bufsize) ? linklen : bufsize;
+	strncpy(buf, link, nbytes);
+
+	return nbytes;
 }
 
 /**

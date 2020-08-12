@@ -14,7 +14,8 @@
 
 #include <stdio.h>
 
-#define BUFFSZ	512
+#define BUFFSZ		512
+#define LINKBUFSZ	4096
 
 int cat(const char *pathname)
 {
@@ -32,4 +33,10 @@ int cat(const char *pathname)
 
 	fs_close(fd);
 	return ret;
+}
+
+int readl(const char *pathname)
+{
+	char link[LINKBUFSZ];
+	return fs_readlink(pathname, link, LINKBUFSZ);
 }

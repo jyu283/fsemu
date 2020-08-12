@@ -27,6 +27,7 @@ struct hfs_dirhash_entry {
 struct hfs_dirhash_table {
     uint32_t                    seqno;
     uint32_t                    inum;
+    uint32_t                    capacity;
     struct hfs_dirhash_table   *prev;
     struct hfs_dirhash_table   *next;
     struct hfs_dirhash_entry    data[HFS_DIRHASH_TABLESIZE];
@@ -53,6 +54,18 @@ void hfs_dirhash_delete(struct hfs_inode *dir, const char *name);
 static inline int inode_dirhash_enabled(struct hfs_inode *dir)
 {
     return (dir->flags & I_DIRHASH);
+}
+
+/**
+ * Disable dirhash for the given directory inode.
+ * Need to reset id and seqno to 0, otherwise the garbage data will
+ * be mistaken as an in-use block address.
+ */
+static inline void inode_disable_dirhash(struct hfs_inode *dir)
+{
+    dir->flags &= (~I_DIRHASH);
+    dir->data.dirhash_rec.id = 0;
+    dir->data.dirhash_rec.seqno = 0;
 }
 
 #endif  // __DIRHASH_H__

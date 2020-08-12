@@ -16,7 +16,8 @@ static char *type_names[] = {
 	[T_UNUSED]  = "UNUSED",
 	[T_REG]     = "FILE  ",
 	[T_DIR]     = "DIR   ",
-	[T_DEV]     = "DEVICE"
+	[T_DEV]     = "DEVICE",
+	[T_SYM]		= "LINK  ",
 };
 
 static inline void print_inode(struct hfs_inode *inode, const char *name)
