@@ -12,7 +12,7 @@
 #include "fs.h"
 
 /* Total number of hash tables */
-#define HFS_DIRHASH_SIZE    20
+#define HFS_DIRHASH_SIZE    100
 
 /* Size of each hash table, a prime number. */
 #define HFS_DIRHASH_TABLESIZE   97

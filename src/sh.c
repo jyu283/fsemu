@@ -227,7 +227,9 @@ out:
  */
 static void show_inline_handler()
 {
+#ifdef HFS_DEBUG
 	show_inline();
+#endif
 }
 
 /**
@@ -235,12 +237,16 @@ static void show_inline_handler()
  */
 static void show_regular_handler()
 {
+#ifdef HFS_DEBUG
 	show_regular();
+#endif
 }
 
 static void dirhash_dump_handler()
 {
+#ifdef HFS_DEBUG
 	hfs_dirhash_dump();
+#endif
 }
 
 /**
