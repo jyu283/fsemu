@@ -13,6 +13,7 @@
 #include "fsemu.h"
 
 #include <stdio.h>
+#include <unistd.h>
 
 #define BUFFSZ		512
 #define LINKBUFSZ	4096
@@ -26,7 +27,10 @@ int cat(const char *pathname)
 	char buf[BUFFSZ];	
 	int ret;
 	while ((ret = fs_read(fd, buf, BUFFSZ)) > 0) {
-		printf("%s", buf);
+		if (write(1, buf, ret) < 0) {
+			perror("write");
+			return -1;
+		}
 	}
 	if (ret < 0) 
 		fs_pstrerror(ret, "cat");
