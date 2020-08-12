@@ -1,16 +1,50 @@
 /**
- * fsemu/src/ls.c
+ * fsemu/src/io_util.c
  * 
- * A basic ls program. Except it isn't really a "program" in the sense
- * of a binary executable. They are really just functions that are a
- * simulacrum of their real-life Linux counterparts. 
+ * Generic I/O utilities for HFS.
  */
 
-#include "fsemu.h"
-#include "fs.h"
 #include "util.h"
+#include "fsemu.h"
+#include "fs_syscall.h"
+#include "fserror.h"
 
+/* The need to include fs.h should be eliminated with further implementation
+ * of more system calls such as getdents(). */
+#include "fs.h"
+
+#include <unistd.h>
 #include <stdio.h>
+
+#define BUFFSZ		512
+#define LINKBUFSZ	4096
+
+int cat(const char *pathname)
+{
+	int fd = fs_open(pathname);
+	if (fd < 0)
+		return fd;
+
+	char buf[BUFFSZ];	
+	int ret;
+	while ((ret = fs_read(fd, buf, BUFFSZ)) > 0) {
+		if (write(1, buf, ret) < 0) {
+			perror("write");
+			return -1;
+		}
+	}
+	if (ret < 0) 
+		fs_pstrerror(ret, "cat");
+
+	fs_close(fd);
+	return ret;
+}
+
+int readl(const char *pathname)
+{
+	char link[LINKBUFSZ];
+	return fs_readlink(pathname, link, LINKBUFSZ);
+}
 
 static char *type_names[] = {
 	[T_UNUSED]  = "UNUSED",
@@ -210,3 +244,39 @@ void show_regular(void)
 }
 
 #endif  // HFS_DEBUG
+
+/**
+ * Load the file in the actual operating system specified by ospath
+ * into the emulator at emupath.
+ */ 
+int loadf(const char *ospath, const char *emupath)
+{
+	FILE *src = fopen(ospath, "r");
+	if (!src) {
+		perror("open");
+		return -1;
+	}
+
+	int fd = fs_open(emupath);
+	if (fd < 0) {
+		fs_pstrerror(fd, "fs_open");
+		return -1;
+	}
+
+	int nread = 0, nwritten = 0, ret;
+	char buf[BUFSIZ];
+	while ((ret = fread(buf, 1, BUFSIZ, src))) {
+		nread += ret;
+		ret = fs_write(fd, buf, ret);
+		if (ret < 0) {
+			fs_pstrerror(ret, "write");
+			return -1;
+		}
+		nwritten += ret;
+	}
+	fs_close(fd);
+	fclose(src);
+
+	printf("Total: %d bytes read, %d bytes written.\n", nread, nwritten);
+	return 0;
+}
