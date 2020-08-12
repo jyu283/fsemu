@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#define BUFFSZ		512
 #define LINKBUFSZ	4096
 
 int cat(const char *pathname)
@@ -25,9 +24,9 @@ int cat(const char *pathname)
 	if (fd < 0)
 		return fd;
 
-	char buf[BUFFSZ];	
+	char buf[BUFSIZ];	
 	int ret;
-	while ((ret = fs_read(fd, buf, BUFFSZ)) > 0) {
+	while ((ret = fs_read(fd, buf, BUFSIZ)) > 0) {
 		if (write(1, buf, ret) < 0) {
 			perror("write");
 			return -1;
