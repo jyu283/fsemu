@@ -31,7 +31,7 @@ $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 
 .PHONY: clean
 clean:
-	$(rm) $(OBJECTS)
+	$(rm) $(OBJDIR)/*
 	$(rm) $(TARGET)
 
 .PHONY: remove
