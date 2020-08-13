@@ -279,3 +279,33 @@ int loadf(const char *ospath, const char *emupath)
 	printf("Total: %d bytes read, %d bytes written.\n", nread, nwritten);
 	return 0;
 }
+
+/**
+ * Inode type name strings used by filestat command.
+ */
+static char *stat_type_names[] = {
+	[T_REG]     = "regular file",
+	[T_DIR]     = "directory",
+	[T_DEV]     = "device",
+	[T_SYM]		= "symbolic link",
+};
+
+/**
+ * filestat [path] command.
+ * stat() a file and print out the metadata.
+ */
+int filestat(const char *pathname)
+{
+	int ret;
+	struct hfs_stat statbuf;
+	if ((ret = fs_stat(pathname, &statbuf)) < 0) {
+		fs_pstrerror(ret, "stat");
+		return -1;
+	}
+
+	printf("File:  %s\n", pathname);
+	printf("Size:  %-15d Blocks: %7d\n", statbuf.st_size, statbuf.st_blocks);
+	printf("Inode: %-15d Links:  %7d  ", statbuf.st_ino, statbuf.st_nlink);
+	printf("%s\n", stat_type_names[statbuf.st_type]);
+	return 0;
+}

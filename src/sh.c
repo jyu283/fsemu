@@ -348,6 +348,19 @@ static void ls_handler()
 }
 
 /**
+ * Handles istat [path] command.
+ */
+static void istat_handler()
+{
+	if (argc != 2) {
+		printf("Usage: istat [pathname]\n");
+		return;
+	}
+
+	filestat(argv[1]);
+}
+
+/**
  * Process a list of arguments broken down by process()
  */
 static int process_args()
@@ -379,6 +392,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "loadf") == 0) {
 		loadf_handler();
+		return 0;
+	} else if (strcmp(argv[0], "istat") == 0) {
+		istat_handler();
 		return 0;
 	}
 
