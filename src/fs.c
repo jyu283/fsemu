@@ -1018,8 +1018,11 @@ unsigned int fs_lseek(int fd, unsigned int off)
  */
 static char *get_off_addr(struct hfs_inode *file, unsigned int off, int alloc)
 {
-	char *addr = NULL;
 	int b = off / BSIZE;
+	if (b > NBLOCKS)
+		return NULL;
+
+	char *addr = NULL;
 	if (file->data.blocks[b]) {
 		addr = BLKADDR(file->data.blocks[b]) + off % BSIZE;
 	} else {
@@ -1118,7 +1121,7 @@ unsigned int do_write(struct hfs_inode *file, unsigned int *off,
 
 	while (n > 0) {
 		if (!(start = get_off_addr(file, *off, 1)))
-			goto out;
+			return -EALLOC;
 
 		// determine what the copy size should be
 		size = n;
@@ -1130,7 +1133,6 @@ unsigned int do_write(struct hfs_inode *file, unsigned int *off,
 		*off += size;
 	}
 
-out:
 	return nwritten;
 }
 
