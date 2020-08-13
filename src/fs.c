@@ -1390,6 +1390,40 @@ int fs_readlink(const char *pathname, char *buf, size_t bufsize)
 }
 
 /**
+ * Perform stat on a given inode.
+ */
+static void do_stat(uint32_t inum, struct hfs_stat *statbuf)
+{
+	memset(statbuf, 0, sizeof(struct hfs_stat));
+
+	struct hfs_inode *inode = inode_from_inum(inum);
+	statbuf->st_ino = inum;
+	statbuf->st_nlink = inode->nlink;
+	statbuf->st_size = inode->size;
+	statbuf->st_type = inode->type;
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (inode->data.blocks[i])
+			statbuf->st_blocks++;
+	} 
+}
+
+/**
+ * Basic implementation of the POSIX stat() system call.
+ */
+int fs_stat(const char *pathname, struct hfs_stat *statbuf)
+{
+	struct hfs_dentry *dent;
+
+	if (!statbuf)
+		return -EINVAL;
+	if (!(dent = lookup(pathname)))
+		return -ENOFOUND;
+
+	do_stat(dent->inum, statbuf);
+	return 0;
+}
+
+/**
  * Prints a list of enabled features.
  */
 void print_features(void)
