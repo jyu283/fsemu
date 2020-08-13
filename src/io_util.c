@@ -87,7 +87,7 @@ static inline void print_inode(struct hfs_inode *inode, const char *name)
 	else if (inode->type == T_SYM)
 		printf(KBLD KCYN);
 	printf("%-16s " KNRM, name);
-	printf("%-6d %3d %s\n", inode->size, inum(inode), mtime);
+	printf("%-6d %6d %s\n", inode->size, inum(inode), mtime);
 }
 
 static inline void print_dentry(struct hfs_dentry *dent, char *off_start)
