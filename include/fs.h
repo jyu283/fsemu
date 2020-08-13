@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 
 #define MAXFSSIZE   0x40000000
 #define BSIZE       0x1000      // block size = 4096 bytes 
@@ -100,6 +101,21 @@ struct hfs_inode {
 		 */
 		char		symlink_path[INODE_BLOCKS_SIZE]; 
 	} data;
+
+	/**
+	 * Last CHANGE time. Updated when inode metadata is updated.
+	 */
+	time_t	ctime;
+
+	/**
+	 * Last ACCESS time. Updated when inode data is last accessed.
+	 */
+	time_t	atime;
+
+	/**
+	 * Last MODIFY time. Updated when inode data content is changed.
+	 */
+	time_t	mtime;
 };
 
 
@@ -174,6 +190,7 @@ struct hfs_superblock {
 	uint64_t		nblocks;    // number of data blocks
 	uint64_t		inodestart;	// start of inodes
 	uint64_t		bitmapstart;	// start of bitmap
+	uint64_t		creation_time;	// creation time of file system
 };
 
 extern char *fs;

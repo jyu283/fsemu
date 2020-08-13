@@ -44,6 +44,22 @@ static inline void inode_unset_inline_flag(struct hfs_inode *inode)
 }
 #endif
 
+
+static inline void inode_touch_atime(struct hfs_inode *inode)
+{
+	inode->atime = time(NULL);
+}
+
+static inline void inode_touch_ctime(struct hfs_inode *inode)
+{
+	inode->ctime = time(NULL);
+}
+
+static inline void inode_touch_mtime(struct hfs_inode *inode)
+{
+	inode->mtime = time(NULL);
+}
+
 /*
  * Calculate the positions of each region of the file system.
  *  - Superblock is the very first block in the file system.
@@ -75,6 +91,8 @@ static void init_superblock(size_t size)
 
 	inodes = BLKADDR(sb->inodestart);
 	bitmap = BLKADDR(sb->bitmapstart);
+
+	sb->creation_time = (uint64_t)time(NULL);
 }
 
 /**
@@ -154,6 +172,9 @@ static void init_inode(struct hfs_inode *inode, uint8_t type)
 	} else if (type == T_REG) {
 		sb->nfiles++;
 	}
+	inode_touch_atime(inode);
+	inode_touch_mtime(inode);
+	inode_touch_ctime(inode);
 }
 
 /*
