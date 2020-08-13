@@ -53,11 +53,22 @@ static char *type_names[] = {
 	[T_SYM]		= "LINK  ",
 };
 
+/**
+ * Print out formatted inode metadata.
+ * File name colours: 
+ * 	 FILE (T_REG) = white
+ *   DIR  (T_DIR) = blue + bold
+ *   LINK (T_SYM) = cyan + bold
+ */
 static inline void print_inode(struct hfs_inode *inode, const char *name)
 {
-	printf("%s %-3d %-16s %-6d inum=%d  ",
-		type_names[inode->type], inode->nlink, name,
-		inode->size, inum(inode));
+	printf("%s %-3d ", type_names[inode->type], inode->nlink);
+	if (inode->type == T_DIR)
+		printf(KBLD KBLU);
+	else if (inode->type == T_SYM)
+		printf(KBLD KCYN);
+	printf("%-16s " KNRM, name);
+	printf("%-6d inum=%d  ", inode->size, inum(inode));
 }
 
 static inline void print_dentry(struct hfs_dentry *dent, char *off_start)
