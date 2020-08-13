@@ -53,6 +53,23 @@ static char *type_names[] = {
 	[T_SYM]		= "LINK  ",
 };
 
+static const char *month_names[] = 
+{
+	[0] = "Jan", [1] = "Feb", [2] = "Mar", [3] = "Apr", [4] = "May",
+	[5] = "Jun", [6] = "Jul", [7] = "Aug", [8] = "Sep", [9] = "Oct",
+	[10] = "Nov", [11] = "Dec", 
+};
+
+/**
+ * Format: Mon DD hh:mm
+ */
+static inline void time_str(time_t *timep, char *timestr)
+{
+	struct tm *t = localtime(timep);
+	sprintf(timestr, "%s %2d %02d:%02d", month_names[t->tm_mon],
+					t->tm_mday, t->tm_hour, t->tm_min);
+}
+
 /**
  * Print out formatted inode metadata.
  * File name colours: 
@@ -62,13 +79,15 @@ static char *type_names[] = {
  */
 static inline void print_inode(struct hfs_inode *inode, const char *name)
 {
+	static char mtime[13];
+	time_str(&inode->mtime, mtime);
 	printf("%s %-3d ", type_names[inode->type], inode->nlink);
 	if (inode->type == T_DIR)
 		printf(KBLD KBLU);
 	else if (inode->type == T_SYM)
 		printf(KBLD KCYN);
 	printf("%-16s " KNRM, name);
-	printf("%-6d inum=%d  ", inode->size, inum(inode));
+	printf("%-6d %3d %s\n", inode->size, inum(inode), mtime);
 }
 
 static inline void print_dentry(struct hfs_dentry *dent, char *off_start)
@@ -77,8 +96,8 @@ static inline void print_dentry(struct hfs_dentry *dent, char *off_start)
 	unsigned long off = (char *)dent - off_start;
 
 	print_inode(inode, dentry_get_name(dent));
-	printf("rlen=%-3d nlen=%-3d off=%lu-%lu\n", dent->reclen, 
-						dent->namelen, off, off + dent->reclen);
+	// printf("rlen=%-3d nlen=%-3d off=%lu-%lu\n", dent->reclen, 
+	// 					dent->namelen, off, off + dent->reclen);
 }
 
 /**
