@@ -27,6 +27,9 @@ struct hfs_stat {
 	uint32_t	st_blocks;
 	uint32_t	st_nlink;
 	uint32_t	st_type;
+	time_t		st_accesstime;
+	time_t		st_modifytime;
+	time_t		st_changetime;
 };
 
 int fs_mount(unsigned long size);

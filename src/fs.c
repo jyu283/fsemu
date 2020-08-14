@@ -19,7 +19,6 @@
 #include <string.h>
 #include <stdint.h>
 
-
 /* Optional add-on features. */
 #ifdef _HFS_DIRHASH
 #include "dirhash.h"
@@ -596,7 +595,8 @@ static struct hfs_dentry *find_dent_in_block(uint32_t bnum, const char *name)
 /**
  * Lookup a dentry in a given INLINE directory (inode).
  */
-static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, const char *name)
+static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, 
+											const char *name)
 {
 	struct hfs_dentry *dent;
 	int namelen = strlen(name) + 1;
@@ -943,6 +943,9 @@ done:
 		update_dir_inode(inode, newdir);
 	}
 
+	inode_touch_ctime(inode);
+	inode_touch_mtime(newdir);
+
 	return 0;
 }
 
@@ -1119,6 +1122,8 @@ unsigned int do_write(struct hfs_inode *file, unsigned int *off,
 	int size;	// size of each write
 	char *start;
 
+	inode_touch_mtime(file);
+
 	while (n > 0) {
 		if (!(start = get_off_addr(file, *off, 1)))
 			return -EALLOC;
@@ -1179,6 +1184,7 @@ int fs_unlink(const char *pathname)
 	if (dentry_get_inode(dent)->type == T_DIR)
 		return -EINVTYPE;
 	unlink_dent(dent);
+	inode_touch_mtime(dir);
 	return 0;
 }
 
@@ -1305,6 +1311,7 @@ int fs_rmdir(const char *pathname)
 
 	unlink_dent(dent);
 	parent->nlink--;
+	inode_touch_mtime(parent);
 	return 0;
 }
 
@@ -1424,6 +1431,9 @@ static void do_stat(uint32_t inum, struct hfs_stat *statbuf)
 	statbuf->st_nlink = inode->nlink;
 	statbuf->st_size = inode->size;
 	statbuf->st_type = inode->type;
+	statbuf->st_accesstime = inode->atime;
+	statbuf->st_modifytime = inode->mtime;
+	statbuf->st_changetime = inode->ctime;
 	for (int i = 0; i < NBLOCKS; i++) {
 		if (inode->data.blocks[i])
 			statbuf->st_blocks++;
@@ -1542,6 +1552,8 @@ int fs_mount(unsigned long size)
 	init_fd();
 	read_sb();
 	close(fd); 
+
+	sb->last_mounted = time(NULL);
 
 	pr_info("File system successfully mounted.\n");
 	print_features();

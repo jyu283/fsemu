@@ -334,8 +334,11 @@ int filestat(const char *pathname)
 	}
 
 	printf("File:  %s\n", pathname);
-	printf("Size:  %-15d Blocks: %7d\n", statbuf.st_size, statbuf.st_blocks);
-	printf("Inode: %-15d Links:  %7d  ", statbuf.st_ino, statbuf.st_nlink);
+	printf("Size:  %-15d Blocks: %-7d\n", statbuf.st_size, statbuf.st_blocks);
+	printf("Inode: %-15d Links:  %-7d  ", statbuf.st_ino, statbuf.st_nlink);
 	printf("%s\n", stat_type_names[statbuf.st_type]);
+	printf("Access: %s", ctime(&statbuf.st_accesstime));
+	printf("Modify: %s", ctime(&statbuf.st_modifytime));
+	printf("Change: %s", ctime(&statbuf.st_changetime));
 	return 0;
 }
