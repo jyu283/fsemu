@@ -38,7 +38,7 @@
 
 // Uncomment the following macros to enable the corresponding features.
 // #define _HFS_INLINE_DIRECTORY
-#define _HFS_DIRHASH
+// #define _HFS_DIRHASH
 
 /*
  * Simple File System layout diagram:
@@ -190,7 +190,8 @@ struct hfs_superblock {
 	uint64_t		nblocks;    // number of data blocks
 	uint64_t		inodestart;	// start of inodes
 	uint64_t		bitmapstart;	// start of bitmap
-	uint64_t		creation_time;	// creation time of file system
+	time_t			creation_time;	// creation time of file system
+	time_t			last_mounted;	// last mount time
 };
 
 extern char *fs;
