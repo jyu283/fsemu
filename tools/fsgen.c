@@ -1241,7 +1241,7 @@ int main(int argc, char *argv[]){
 	    }
 	  }else if(strcmp(argv[i], "sLocal=") == 0){
 	    if(strcmp(argv[i+1], "R") == 0){
-              sLocal = rand() % 100;
+              sLocal = rand() % 100 + 1;
             }else{
 	      if(atoi(argv[i+1])<=100 && atoi(argv[i+1])>0){
 		sLocal = atoi(argv[i+1]);
