@@ -18,6 +18,9 @@
 
 #define LINKBUFSZ	4096
 
+/**
+ * cat - concatenate files and print on the standard output.
+ */
 int cat(const char *pathname)
 {
 	int fd = fs_open(pathname);
@@ -39,6 +42,9 @@ int cat(const char *pathname)
 	return ret;
 }
 
+/**
+ * readl (readlink) - print resolved symbolic links or canonical file names.
+ */
 int readl(const char *pathname)
 {
 	char link[LINKBUFSZ];
@@ -154,6 +160,9 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 	
 }
 
+/**
+ * ls - list directory contents
+ */
 int ls(const char *pathname)
 {
 	struct hfs_inode *src;
@@ -275,6 +284,8 @@ void show_regular(void)
 #endif  // HFS_DEBUG
 
 /**
+ * loadf - load a local file's contents into a file in the emulator.
+ * 
  * Load the file in the actual operating system specified by ospath
  * into the emulator at emupath.
  */ 
@@ -321,6 +332,8 @@ static char *stat_type_names[] = {
 };
 
 /**
+ * filestat (istat) - display file status
+ * 
  * filestat [path] command.
  * stat() a file and print out the metadata.
  */
