@@ -11,10 +11,6 @@
 #include "util.h"
 #include "fsemu.h"
 
-#ifdef DCACHE_ENABLED
-#include "dentry_cache.h"
-#endif  // DCACHE_ENABLED
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -23,10 +19,45 @@
 #include <string.h>
 #include <stdint.h>
 
+/* Optional add-on features. */
+#ifdef _HFS_DIRHASH
+#include "dirhash.h"
+#endif
+
 char *fs = NULL;
 struct hfs_superblock *sb;
 struct hfs_inode *inodes;
 char *bitmap;
+
+#ifdef _HFS_INLINE_DIRECTORY
+static inline void inode_set_inline_flag(struct hfs_inode *inode)
+{
+	inode->flags |= I_INLINE;
+	sb->inline_inodes++;
+}
+
+static inline void inode_unset_inline_flag(struct hfs_inode *inode)
+{
+	inode->flags &= (~I_INLINE);
+	sb->inline_inodes--;
+}
+#endif
+
+
+static inline void inode_touch_atime(struct hfs_inode *inode)
+{
+	inode->atime = time(NULL);
+}
+
+static inline void inode_touch_ctime(struct hfs_inode *inode)
+{
+	inode->ctime = time(NULL);
+}
+
+static inline void inode_touch_mtime(struct hfs_inode *inode)
+{
+	inode->mtime = time(NULL);
+}
 
 /*
  * Calculate the positions of each region of the file system.
@@ -38,11 +69,12 @@ char *bitmap;
 static void init_superblock(size_t size)
 {
 	sb = (struct hfs_superblock *)fs;
+	memset(sb, 0x0, BSIZE);
 
 	int total_blocks = size / BSIZE;
 	int inode_blocks = total_blocks * 0.03;
 	sb->size = total_blocks;
-	pr_debug("Total blocks: %d.\n", total_blocks);
+	pr_info("Total blocks: %d.\n", total_blocks);
 
 	sb->inodestart = 1;
 	sb->ninodes = inode_blocks * INOPERBLK; 
@@ -58,6 +90,8 @@ static void init_superblock(size_t size)
 
 	inodes = BLKADDR(sb->inodestart);
 	bitmap = BLKADDR(sb->bitmapstart);
+
+	sb->creation_time = (uint64_t)time(NULL);
 }
 
 /**
@@ -114,6 +148,34 @@ static void free_data_block(uint32_t b)
 	bm[byte] &= ~(1 << bit);
 }
 
+/**
+ * Initialize inode, set type and flags.
+ */
+static void init_inode(struct hfs_inode *inode, uint8_t type)
+{
+	memset((void *)inode, 0x0, sizeof(struct hfs_inode));
+	inode->type = type;
+	sb->inode_used++;
+	// Enable inline by default for directories.
+	if (type == T_DIR) {
+		sb->ndirectories++;
+#ifdef _HFS_INLINE_DIRECTORY
+		inode_set_inline_flag(inode);
+#endif
+#ifdef _HFS_DIRHASH
+		// Enable dirhash if and only if the directory
+		// is not set to inline mode.
+		if (!(inode->flags & I_INLINE))
+			inode->flags |= I_DIRHASH;
+#endif
+	} else if (type == T_REG) {
+		sb->nfiles++;
+	}
+	inode_touch_atime(inode);
+	inode_touch_mtime(inode);
+	inode_touch_ctime(inode);
+}
+
 /*
  * Locates an unused (T_UNUSED) inode from the inode pool
  * and returns a pointer to that inode. Also initializes 
@@ -126,14 +188,7 @@ static struct hfs_inode *alloc_inode(uint8_t type)
 	for (int i = 1; i < sb->ninodes; i++) {
 		inode = &inodes[i];
 		if (inode->type == T_UNUSED) {
-			memset((void *)inode, 0x0, sizeof(struct hfs_inode));
-			inode->type = type;
-			sb->inode_used++;
-#ifdef _HFS_INLINE_DIRECTORY
-			// Enable inline by default for directories.
-			if (type == T_DIR) 
-				inode->flags |= I_INLINE;
-#endif
+			init_inode(inode, type);
 			return inode;
 		}
 	}
@@ -157,6 +212,12 @@ static int free_inode(struct hfs_inode *inode)
 			inode->data.blocks[i] = 0;
 		}
 	}
+
+	if (inode->type == T_DIR)
+		sb->ndirectories--;
+	else if (inode->type == T_REG)
+		sb->nfiles--;
+
 	inode->type = T_UNUSED;
 	sb->inode_used--;
 	return 0;
@@ -188,6 +249,11 @@ static struct hfs_dentry *alloc_dentry_from_block(uint32_t block_num,
 
 /**
  * Allocates a dentry of reclen to the given directory inode.
+ * 
+ * _HFS_DIRHASH:
+ * If, as a result of this allocation, the size of this directory grows
+ * beyond one block, then we need to unset the I_DIRHASH flag to indicate
+ * that this directory will NO LONGER use dirhash.
  */
 static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 {
@@ -209,6 +275,12 @@ static struct hfs_dentry *alloc_dentry(struct hfs_inode *dir, uint16_t reclen)
 		return NULL;
 
 	// allocate new data block to unused address
+#ifdef _HFS_DIRHASH
+	// If we are allocating ALL BUT the VERY FIRST block, then 
+	// we need to disable dirhash for this directory.
+	if (dir->data.blocks[0])
+		dir->flags &= ~I_DIRHASH;
+#endif 
 	if ((dir->data.blocks[unused] = alloc_data_block()) == 0) {
 		printf("Error: data allocation failed.\n");
 		return NULL;
@@ -327,7 +399,11 @@ static int convert_inline_directory(struct hfs_inode *dir)
 	}
 
 	// Unset the inline bit in flag
-	dir->flags &= ~I_INLINE;
+	inode_unset_inline_flag(dir);
+
+#ifdef _HFS_DIRHASH
+	dir->flags |= I_DIRHASH;
+#endif
 
 	// Wipe out the inode.data area, and set the first block
 	// Thus dawns a new age for this directory inode.
@@ -363,6 +439,12 @@ static struct hfs_dentry *new_dentry(struct hfs_inode *dir,
 
 	init_dentry(dent, inode, name);
 	inode->nlink++;
+
+#ifdef _HFS_DIRHASH
+	if (dir->flags & I_DIRHASH)
+		hfs_dirhash_put(dir, dent);
+#endif
+
 	return dent;
 }
 
@@ -404,32 +486,27 @@ static int init_dir_inode(struct hfs_inode *dir, struct hfs_inode *parent)
 /*
  * Create a file/directory/device.
  */
-int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
+struct hfs_dentry *do_creat(struct hfs_inode *dir, 
+							const char *name, uint8_t type)
 {
 	int ret;
+	struct hfs_dentry *dent;
+	struct hfs_inode *inode;
 
-	if (dir->type != T_DIR) {
-		printf("Error: invalid inode type.\n");
-		return -EINVTYPE;
-	}
-	if (strlen(name) + 1 > DENTRYNAMELEN) {
-		printf("creat: name too long.\n");
-		return -EINVNAME;
-	}
-	struct hfs_inode *inode = alloc_inode(type);
-	if (!inode) {
-		printf("Error: failed to allocate inode.\n");
-		return -EALLOC;
-	}
-	if (!new_dentry(dir, inode, name)) {
-		printf("Error: failed to create dentry %s.\n", name);
-		return -EALLOC;
-	}
+	inode = alloc_inode(type);
+	if (!inode)
+		return NULL;
+
+	if (!(dent = new_dentry(dir, inode, name)))
+		return NULL;
+
 	if (type == T_DIR) {
-		if ((ret = init_dir_inode(inode, dir)) < 0)
-			return ret;
+		if ((ret = init_dir_inode(inode, dir)) < 0) {
+			unlink_dent(dent);
+			return NULL;
+		}
 	}
-	return 0;
+	return dent;
 }
 
 /*
@@ -438,7 +515,7 @@ int do_creat(struct hfs_inode *dir, const char *name, uint8_t type)
 static void init_rootdir(void)
 {
 	struct hfs_inode *rootino = alloc_inode(T_DIR);     
-	pr_debug("Root inum: %d\n", inum(rootino));
+	pr_info("Root inum: %d\n", inum(rootino));
 	init_dir_inode(rootino, rootino);	// root inode parent is self
 }
 
@@ -461,7 +538,9 @@ static int init_fs(size_t size)
 	init_superblock(size);	// fill in superblock
 	init_rootdir();			// create root directory
 
-	pr_debug("File system initialization completed!\n");
+	pr_debug("Inode size: %ld\n", sizeof(struct hfs_inode));
+	pr_debug("Dentry size: %ld\n", sizeof(struct hfs_dentry));
+	pr_info("File system initialization completed!\n");
 	return 0;
 }
 
@@ -470,14 +549,20 @@ static int init_fs(size_t size)
  */
 static int init_caches(void)
 {
-#ifdef DCACHE_ENABLED
-	if (dentry_cache_init_all() < 0) {
-		printf("Error: failed to initialize dentry cache.\n");
-		return -1;
-	}
-#endif  // DCACHE_ENABLED
-
+#ifdef _HFS_DIRHASH
+	hfs_dirhash_init();
+#endif
 	return 0;
+}
+
+/**
+ * Free in-memory hashes.
+ */
+static void free_caches(void)
+{
+#ifdef _HFS_DIRHASH
+	hfs_dirhash_free();
+#endif
 }
 
 /**
@@ -510,7 +595,8 @@ static struct hfs_dentry *find_dent_in_block(uint32_t bnum, const char *name)
 /**
  * Lookup a dentry in a given INLINE directory (inode).
  */
-static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, const char *name)
+static struct hfs_dentry *lookup_inline_dent(struct hfs_inode *dir, 
+											const char *name)
 {
 	struct hfs_dentry *dent;
 	int namelen = strlen(name) + 1;
@@ -658,7 +744,7 @@ static void get_filename(const char *pathname, char *name)
  */
 static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 {
-	struct hfs_dentry *dent, *curr;
+	struct hfs_dentry *dent = NULL;
 	struct hfs_inode *prev;
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
@@ -667,7 +753,19 @@ static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
-		if (!(dent = lookup_dent(prev, component))) {
+		if (prev->flags & I_DIRHASH) {
+#ifdef _HFS_DIRHASH
+			struct hfs_dirhash_entry *ent;
+			if ((ent = hfs_dirhash_lookup(prev, component)))
+				dent = ent->dent;
+			else
+				dent = NULL;
+#endif
+		} else {
+			dent = lookup_dent(prev, component);
+		}
+
+		if (!dent) {
 			// If lookup failed on the last component, then fill
 			// in the pi field. Otherwise, set pi field to NULL
 			// to indicate that lookup failed along the way.
@@ -733,19 +831,29 @@ static int get_open_fd(void)
  */
 int fs_creat(const char *pathname)
 {
-	int fd;
+	int fd, ret;
 	struct hfs_dentry *dent;
 	struct hfs_inode *dir;
 
-	if ((dent = dir_lookup(pathname, &dir)))
+	if ((dent = dir_lookup(pathname, &dir))) {
+		pr_warn("%s already exists.\n", pathname);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
+	if (dir->type != T_DIR)
+		return -EINVTYPE;
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(pathname, filename);
 
-	return do_creat(dir, filename, T_REG);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(do_creat(dir, filename, T_REG)))
+		return -EALLOC;
+	
+	return 0;
 }
 
 /**
@@ -835,6 +943,9 @@ done:
 		update_dir_inode(inode, newdir);
 	}
 
+	inode_touch_ctime(inode);
+	inode_touch_mtime(newdir);
+
 	return 0;
 }
 
@@ -910,8 +1021,11 @@ unsigned int fs_lseek(int fd, unsigned int off)
  */
 static char *get_off_addr(struct hfs_inode *file, unsigned int off, int alloc)
 {
-	char *addr = NULL;
 	int b = off / BSIZE;
+	if (b > NBLOCKS)
+		return NULL;
+
+	char *addr = NULL;
 	if (file->data.blocks[b]) {
 		addr = BLKADDR(file->data.blocks[b]) + off % BSIZE;
 	} else {
@@ -1008,9 +1122,11 @@ unsigned int do_write(struct hfs_inode *file, unsigned int *off,
 	int size;	// size of each write
 	char *start;
 
+	inode_touch_mtime(file);
+
 	while (n > 0) {
 		if (!(start = get_off_addr(file, *off, 1)))
-			goto out;
+			return -EALLOC;
 
 		// determine what the copy size should be
 		size = n;
@@ -1022,7 +1138,6 @@ unsigned int do_write(struct hfs_inode *file, unsigned int *off,
 		*off += size;
 	}
 
-out:
 	return nwritten;
 }
 
@@ -1049,8 +1164,6 @@ unsigned int fs_write(int fd, void *buf, unsigned int count)
 	unsigned int off = openfiles[fd].offset;
 	ret = do_write(file, &off, buf, count);
 	
-	pr_debug("write: %d bytes written.\n", ret);
-
 	if (ret) {
 		openfiles[fd].offset = off;
 		if (off > file->size)
@@ -1071,6 +1184,7 @@ int fs_unlink(const char *pathname)
 	if (dentry_get_inode(dent)->type == T_DIR)
 		return -EINVTYPE;
 	unlink_dent(dent);
+	inode_touch_mtime(dir);
 	return 0;
 }
 
@@ -1088,8 +1202,10 @@ int fs_link(const char *oldpath, const char *newpath)
 
 	// make sure newpath doesn't already exist
 	struct hfs_inode *dir;
-	if (dir_lookup(newpath, &dir))
+	if (dir_lookup(newpath, &dir)) {
+		pr_warn("%s already exists.\n", newpath);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
 
@@ -1109,15 +1225,25 @@ int fs_mkdir(const char *pathname)
 {
 	struct hfs_inode *dir;
 
-	if (dir_lookup(pathname, &dir))
+	if (dir_lookup(pathname, &dir)) {
+		pr_warn("%s already exists.\n", pathname);
 		return -EEXISTS;
+	}
 	if (!dir)
 		return -ENOFOUND;
+	if (dir->type != T_DIR)
+		return -EINVTYPE;
 
 	char filename[DENTRYNAMELEN + 1];
 	get_filename(pathname, filename);
 
-	return do_creat(dir, filename, T_DIR);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(do_creat(dir, filename, T_DIR)))
+		return -EALLOC;
+
+	return 0;
 }
 
 /**
@@ -1185,7 +1311,173 @@ int fs_rmdir(const char *pathname)
 
 	unlink_dent(dent);
 	parent->nlink--;
+	inode_touch_mtime(parent);
 	return 0;
+}
+
+/**
+ * Set the target of a symbolic link (i.e. write the path name).
+ * We always treat the symlink inode as a brand-new inode because of
+ * the assumption that a symlink CANNOT be updated.
+ */
+static int symlink_set_target(struct hfs_inode *symlink, const char *target)
+{
+	memset(symlink->data.symlink_path, 0, INODE_BLOCKS_SIZE);
+
+	/* Attempt inline link */
+	int linklen = strlen(target) + 1;
+	if (linklen <= INODE_BLOCKS_SIZE) {
+		strncpy(symlink->data.symlink_path, target, linklen);
+		symlink->flags |= I_INLINE;
+		return 0;
+	}
+
+	/* Regular symlink, stored in a block */
+	if (!(symlink->data.blocks[0] = alloc_data_block()))
+		return -EALLOC;
+	char *path = BLKADDR(symlink->data.blocks[0]);
+	strncpy(path, target, linklen);
+	return 0;
+}
+
+/**
+ * Basic version of the POSIX symlink() system call.
+ * 
+ * fs_symlink() creates a symbolic link named linkpath which
+ * contains the string target.
+ * 
+ * Note that a symbolic link CANNOT be edited; it can only be replaced
+ * by a new symbolic link. So when setting the path in the symlink,
+ * we can safely assume that there will be no pre-existing data.
+ */
+int fs_symlink(const char *target, const char *linkpath)
+{
+	int ret;
+	struct hfs_dentry *dent;
+	struct hfs_inode *dir = NULL, *symlink;
+
+	if (strlen(target) > BSIZE)
+		return -EINVAL;
+
+	if ((do_lookup(linkpath, &dir)))
+		return -EEXISTS;
+	if (!dir)
+		return -ENOFOUND;
+	
+	symlink = alloc_inode(T_SYM);
+	if (!symlink)
+		return -EALLOC;
+
+	char filename[DENTRYNAMELEN];
+	get_filename(linkpath, filename);
+	if (strlen(filename) > DENTRYNAMELEN)
+		return -EINVNAME;
+
+	if (!(dent = do_creat(dir, filename, T_SYM)))
+		return -EALLOC;
+
+	symlink = inode_from_inum(dent->inum);
+	if ((ret = symlink_set_target(symlink, target)) < 0)
+		unlink_dent(dent);
+
+	return ret;
+}
+
+/**
+ * Read the path stored in a symbolic link.
+ * @param pathname	the path to the symbolic link in question.
+ * @param buf		user-provided buffer wherein to store the result.
+ * @param bufsize	size of the user-provided buffer.
+ * @return			the number of bytes stored in buf.
+ */
+int fs_readlink(const char *pathname, char *buf, size_t bufsize)
+{
+	struct hfs_dentry *dent;
+	struct hfs_inode *symlink;
+	char *link;
+	int nbytes = 0, linklen;
+
+	if (!buf || bufsize == 0)
+		return -EINVAL;
+	if (!(dent = lookup(pathname)))
+		return -ENOFOUND;
+	
+	symlink = inode_from_inum(dent->inum);
+	if (symlink->type != T_SYM)
+		return -EINVTYPE;
+
+	/* Determine where link is stored (inline vs block) */
+	link = (symlink->flags & I_INLINE) ?
+			(char *)symlink->data.symlink_path : 
+			BLKADDR(symlink->data.blocks[0]);
+	linklen = strlen(link);
+
+	/* If link is longer than buffer size, truncate copy size */
+	nbytes = (linklen < bufsize) ? linklen : bufsize;
+	strncpy(buf, link, nbytes);
+
+	return nbytes;
+}
+
+/**
+ * Perform stat on a given inode.
+ */
+static void do_stat(uint32_t inum, struct hfs_stat *statbuf)
+{
+	memset(statbuf, 0, sizeof(struct hfs_stat));
+
+	struct hfs_inode *inode = inode_from_inum(inum);
+	statbuf->st_ino = inum;
+	statbuf->st_nlink = inode->nlink;
+	statbuf->st_size = inode->size;
+	statbuf->st_type = inode->type;
+	statbuf->st_accesstime = inode->atime;
+	statbuf->st_modifytime = inode->mtime;
+	statbuf->st_changetime = inode->ctime;
+	for (int i = 0; i < NBLOCKS; i++) {
+		if (inode->data.blocks[i])
+			statbuf->st_blocks++;
+	} 
+}
+
+/**
+ * Basic implementation of the POSIX stat() system call.
+ */
+int fs_stat(const char *pathname, struct hfs_stat *statbuf)
+{
+	struct hfs_dentry *dent;
+
+	if (!statbuf)
+		return -EINVAL;
+	if (!(dent = lookup(pathname)))
+		return -ENOFOUND;
+
+	do_stat(dent->inum, statbuf);
+	return 0;
+}
+
+/**
+ * Prints a list of enabled features.
+ */
+void print_features(void)
+{
+	pr_info(KBLD "\nENABLED FEATURES: \n" KNRM);
+
+#ifdef _HFS_INLINE_DIRECTORY
+	pr_info(KBLD KGRN "[ON]  " KNRM);
+#else
+	pr_info(KBLD KYEL "[OFF] " KNRM);
+#endif
+	pr_info("Inline directories\n");
+
+#ifdef _HFS_DIRHASH
+	pr_info(KBLD KGRN "[ON]  " KNRM);
+#else
+	pr_info(KBLD KYEL "[OFF] " KNRM);
+#endif
+	pr_info("Dirhash\n");
+
+	pr_info("\n");
 }
 
 /*
@@ -1229,9 +1521,15 @@ int fs_mount(unsigned long size)
 		fs_size = statbuf.st_size;
 	} else {
 		printf("Creating new file system...\n");
-		ftruncate(fd, 0);
+		if (ftruncate(fd, 0) < 0) {
+			perror("ftruncate");
+			return -1;
+		}
 		lseek(fd, size, SEEK_SET);
-		write(fd, "\0", 1);
+		if (write(fd, "\0", 1) < 0) {
+			perror("Reset image: write");
+			return -1;
+		}
 		fs_size = size;
 	}
 
@@ -1241,21 +1539,24 @@ int fs_mount(unsigned long size)
 		return -1;
 	}
 
+	// Initialize in-memory caches
+	if (init_caches() < 0)
+		return -1;
+
 	// If file system is newly created, initialise everything.
 	if (fs_is_new) {
 		if (init_fs(fs_size) < 0)
 			return -1;
 	}
 
-	// Initialize DCACHE if enabled.
-	if (init_caches() < 0)
-		return -1;
-
 	init_fd();
 	read_sb();
 	close(fd); 
 
-	pr_debug("File system successfully mounted.\n");
+	sb->last_mounted = time(NULL);
+
+	pr_info("File system successfully mounted.\n");
+	print_features();
 	return 0;
 }
 
@@ -1267,10 +1568,27 @@ int fs_unmount(void)
 	if (!fs)
 		return -1;
 
-#ifdef DCACHE_ENABLED
-	dentry_cache_free_all();
-#endif  // DCACHE_ENABLED
+	free_caches();
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
+	return 0;
+}
+
+/**
+ * Completely reset the file system.
+ */
+int fs_reset(void)
+{
+	if (!fs)
+		return -1;
+
+	unsigned long fs_size = sb->size * BSIZE;
+	memset(fs, 0x0, fs_size);
+	if (init_fs(fs_size) < 0)
+		return -1;
+	if (init_caches() < 0)
+		return -1;
+	init_fd();
+	read_sb();
 	return 0;
 }

@@ -53,10 +53,8 @@ int benchmark_init_fs(const char *input_file)
 		line[strlen(line) - 1] = '\0';  // clear trailing \n
 		pathname = line + 2;
 		if (line[0] == 'D') {
-			// pr_debug("mkdir %s\n", pathname);
 			ret = fs_mkdir(pathname);
 		} else if (line[0] == 'F') {
-			// pr_debug("creat %s\n", pathname);
 			ret = fs_creat(pathname);
 		} else {
 			return -1;
@@ -100,7 +98,10 @@ int benchmark_lookup(const char *input_file, int repcount)
 
 	end = clock();
 	time = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
+
+	printf("\033[32;1m");
 	printf("Average running time per cycle: %.3fms.\n", time/repcount);
+	printf("\033[0m\n");
 
 	fclose(fp);
 	return 0;

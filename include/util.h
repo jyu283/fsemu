@@ -14,9 +14,18 @@
 int ls(const char *pathname);
 void lsfd(void);
 int cat(const char *pathname);
+int readl(const char *pathname);
+int loadf(const char *ospath, const char *emupath);
+int filestat(const char *pathname);
 
 int benchmark_init_fs(const char *input_file);
 int benchmark_lookup(const char *input_file, int repcount);
 void benchmark(const char *input_file);
+
+#ifdef HFS_DEBUG
+void show_inline(void);
+void show_regular(void);
+void hfs_dirhash_dump(void);
+#endif  // HFS_DEBUG
 
 #endif  // __UTIL_H__

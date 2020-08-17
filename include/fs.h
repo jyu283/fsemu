@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 
 #define MAXFSSIZE   0x40000000
 #define BSIZE       0x1000      // block size = 4096 bytes 
@@ -35,13 +36,9 @@
 #define INOPERBLK   (BSIZE / sizeof(struct hfs_inode))
 #define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
-/* In-memory caches:
- * DCACHE: Dentry cache. Stores contents of directories.
- * 
- * Uncomment the following macros to enable the corresponding features.
- */
-// #define DCACHE_ENABLED
-#define _HFS_INLINE_DIRECTORY
+// Uncomment the following macros to enable the corresponding features.
+// #define _HFS_INLINE_DIRECTORY
+// #define _HFS_DIRHASH
 
 /*
  * Simple File System layout diagram:
@@ -52,10 +49,12 @@
 #define T_REG		1
 #define T_DIR		2
 #define T_DEV		3
+#define T_SYM		4
 #define NBLOCKS		15
 
 /* Inode flags */
-#define I_INLINE	0x00000001
+#define I_INLINE	0x00000001		/* Inline directory/symlink */
+#define I_DIRHASH	0x00000002		/* Dirhashed directory */
 
 struct hfs_dentry {
 	uint32_t	inum;
@@ -65,20 +64,58 @@ struct hfs_dentry {
 	char		name[0];
 };
 
+#define INODE_BLOCKS_SIZE	(sizeof(uint32_t) * NBLOCKS)
+
 struct hfs_inode {
 	uint32_t		nlink;
 	uint32_t		size;
+	uint8_t			type;
 	uint32_t		flags;
 	union {
 		uint32_t	blocks[NBLOCKS];
-#ifdef _HFS_INLINE_DIRECTORY
+
+		/**
+		 * Dirhashed directory: If dirhash is enabled for a directory,
+		 * there can only be one block full of directory entries.
+		 * After the single block address, the dirhash_rec field is used
+		 * to identify the dirhash table for this directory.
+		 */
+		struct {
+			uint32_t	block;
+			uint32_t	seqno;
+			uint16_t	id;
+		} dirhash_rec;
+
+		/**
+		 * Inline directory mode: The 60-byte hfs_inode.data field
+		 * is used to directory store directory entries, as well as
+		 * the parent directory's inum.
+		 */
 		struct {
 			uint32_t				p_inum;
 			struct hfs_dentry		dent_head;
 		} inline_dir;
-#endif
+
+		/**
+		 * Inline symbolic link path.
+		 */
+		char		symlink_path[INODE_BLOCKS_SIZE]; 
 	} data;
-	uint8_t			type; 
+
+	/**
+	 * Last CHANGE time. Updated when inode metadata is updated.
+	 */
+	time_t	ctime;
+
+	/**
+	 * Last ACCESS time. Updated when inode data is last accessed.
+	 */
+	time_t	atime;
+
+	/**
+	 * Last MODIFY time. Updated when inode data content is changed.
+	 */
+	time_t	mtime;
 };
 
 
@@ -146,10 +183,15 @@ struct hfs_superblock {
 	uint64_t		size;       // total size in blocks
 	uint64_t		ninodes;    // number of inodes
 	uint64_t		inode_used;	// number of inodes in use
+	uint64_t		inline_inodes;	// number of inline inodes
+	uint64_t		ndirectories;	// number of directories
+	uint64_t		nfiles;			// number of files
 	uint64_t		datastart;	// data start block
 	uint64_t		nblocks;    // number of data blocks
 	uint64_t		inodestart;	// start of inodes
 	uint64_t		bitmapstart;	// start of bitmap
+	time_t			creation_time;	// creation time of file system
+	time_t			last_mounted;	// last mount time
 };
 
 extern char *fs;

@@ -73,21 +73,25 @@ SYSCALL_DEFINE2(rename, const char *, const char *);
 SYSCALL_DEFINE2(lseek, int, unsigned int);
 SYSCALL_DEFINE3(read, int, void *, unsigned int);
 SYSCALL_DEFINE3(write, int, void *, unsigned int);
+SYSCALL_DEFINE0(reset);
+SYSCALL_DEFINE2(symlink, const char *, const char *);
 
 static int (*syscalls[])(void) = {
-	[SYS_mount]		sys_mount,
-	[SYS_unmount]	sys_unmount,
-	[SYS_open]		sys_open,
-	[SYS_close]		sys_close,
-	[SYS_unlink]	sys_unlink,
-	[SYS_link]		sys_link,
-	[SYS_mkdir]		sys_mkdir,
-	[SYS_rmdir]		sys_rmdir,
-	[SYS_creat]		sys_creat,
-	[SYS_lseek]		sys_lseek,
-	[SYS_read]		sys_read,
-	[SYS_write]		sys_write,
-	[SYS_rename]	sys_rename
+	[SYS_mount]		= sys_mount,
+	[SYS_unmount]	= sys_unmount,
+	[SYS_open]		= sys_open,
+	[SYS_close]		= sys_close,
+	[SYS_unlink]	= sys_unlink,
+	[SYS_link]		= sys_link,
+	[SYS_mkdir]		= sys_mkdir,
+	[SYS_rmdir]		= sys_rmdir,
+	[SYS_creat]		= sys_creat,
+	[SYS_lseek]		= sys_lseek,
+	[SYS_read]		= sys_read,
+	[SYS_write]		= sys_write,
+	[SYS_rename]	= sys_rename,
+	[SYS_reset]		= sys_reset,
+	[SYS_symlink]	= sys_symlink,
 };
 
 static const char *prompt = "(fsemu) ";
@@ -98,7 +102,8 @@ static const char *prompt = "(fsemu) ";
 static inline void print_prompt(void)
 {
 	fflush(stdout);
-	write(STDOUT_FILENO, prompt, PROMPTLEN);
+	printf("%s", prompt);
+	fflush(stdout);
 }
 
 /**
@@ -123,6 +128,8 @@ static int get_sysnum(const char *name)
 	REGISTER_SYSCALL(lseek);
 	REGISTER_SYSCALL(read);
 	REGISTER_SYSCALL(write);
+	REGISTER_SYSCALL(reset);
+	REGISTER_SYSCALL(symlink);
 
 	return -1;
 }
@@ -199,6 +206,14 @@ static int syscall_handler(void)
 		SYSCALL_ARGPTR(0);
 		SYSCALL_ARGPTR(1);
 		break;
+	case SYS_reset:
+		check_argc(0);
+		break;
+	case SYS_symlink:
+		check_argc(2);
+		SYSCALL_ARGPTR(0);
+		SYSCALL_ARGPTR(1);
+		break;
 	default:
 		ret = -ECMD;
 		goto out;
@@ -213,6 +228,57 @@ out:
 		ret = -1;
 	}
 	return ret;
+}
+
+/**
+ * Handles the show_inline command.
+ */
+static void show_inline_handler()
+{
+#ifdef HFS_DEBUG
+	show_inline();
+#endif
+}
+
+/**
+ * Handles the show_regular command.
+ */
+static void show_regular_handler()
+{
+#ifdef HFS_DEBUG
+	show_regular();
+#endif
+}
+
+static void dirhash_dump_handler()
+{
+#ifdef HFS_DEBUG
+	hfs_dirhash_dump();
+#endif
+}
+
+/**
+ * Handles readl command (readlink)
+ */
+static void readl_handler()
+{
+	if (argc != 2) {
+		printf("Usage: readl [LINK]\n");
+		return;
+	}
+	readl(argv[1]);
+}
+
+/**
+ * Handles "loadf [ospath] [emupath]" command.
+ */
+static void loadf_handler()
+{
+	if (argc != 3) {
+		printf("Usage: loadf [ospath] [emupath]\n");
+		return;
+	}
+	loadf(argv[1], argv[2]);
 }
 
 /**
@@ -282,6 +348,19 @@ static void ls_handler()
 }
 
 /**
+ * Handles istat [path] command.
+ */
+static void istat_handler()
+{
+	if (argc != 2) {
+		printf("Usage: istat [pathname]\n");
+		return;
+	}
+
+	filestat(argv[1]);
+}
+
+/**
  * Process a list of arguments broken down by process()
  */
 static int process_args()
@@ -298,6 +377,24 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "benchmark") == 0) {
 		benchmark_handler();
+		return 0;
+	} else if (strcmp(argv[0], "show_inline") == 0) {
+		show_inline_handler();
+		return 0;
+	} else if (strcmp(argv[0], "show_regular") == 0) {
+		show_regular_handler();
+		return 0;
+	} else if (strcmp(argv[0], "dirhash_dump") == 0) {
+		dirhash_dump_handler();
+		return 0;
+	} else if (strcmp(argv[0], "readl") == 0) {
+		readl_handler();
+		return 0;
+	} else if (strcmp(argv[0], "loadf") == 0) {
+		loadf_handler();
+		return 0;
+	} else if (strcmp(argv[0], "istat") == 0) {
+		istat_handler();
 		return 0;
 	}
 
@@ -344,13 +441,15 @@ int process(char *line)
 /**
  * Interactive shell
  */
-void sh(void)
+void sh(FILE *fp)
 {
 	char *line = NULL;
 	size_t len = 0;
 
 	print_prompt();
-	while (getline(&line, &len, stdin) != -1) {
+	while (getline(&line, &len, fp) != -1) {
+		if (fp != stdin)
+			printf("%s", line);
 		if (process(line) < 0)
 			break;
 		print_prompt();

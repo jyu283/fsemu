@@ -17,9 +17,9 @@ import random
 
 # List of possible file extensions
 file_extensions = [
-    "txt", "doc", "docx", "png", "jpeg", "mp4", "mkv", "avi", "c", "cpp", "h",
-    "py", "out", "md", "pdf", "odt", "html", "ppt", "pptx", "xls", "xlsx", 
-    "bmp", "class", "java", "exe", "mov", "psd", "tar", "rar", "tif", "wav"
+    "txt", "doc", "docx", "png", "jpeg", "mp4", "mkv", "avi", "cpp",
+    "out", "md", "pdf", "odt", "html", "ppt", "pptx", "xls", "xlsx", 
+    "bmp", "java", "exe", "mov", "psd", "tar", "rar", "tif", "wav"
 ]
 
 # It pains me immensely to see inode and dentry with capitalised I's and D's,
@@ -68,29 +68,36 @@ class Inode():
         self.data = []
         self.isdir = True
 
+        names = []  # Keep track of the names generated for this directory
+
         # Create a number of regular files
         for _ in range(Inode.avg_dirsize - self.ndirs):
-            name = self.rand_name(random.randrange(Inode.avg_namelen - 4, 
-                                                Inode.avg_namelen))
-            # apply file extension
-            name += "."
-            name += random.choice(file_extensions)
-            self.new_entry(name)
-
-        if self.level >= Inode.avg_depth:
-            return
+            while True:
+                name = self.rand_name(Inode.avg_namelen)
+                # apply file extension
+                name += "."
+                name += random.choice(file_extensions)
+                if name not in names:
+                    names.append(names)
+                    self.new_entry(name)
+                    break
 
         # create a number (self.NSUBDIRS) of sub-directories
+        names.clear()
         for _ in range(self.ndirs):
-            name = self.rand_name(random.randrange(Inode.avg_namelen - 2,
-                                                    Inode.avg_namelen + 2))
-            name += "/"
-            dir = self.new_entry(name, isdir=True)
-            dir.populate()
+            while True:
+                name = self.rand_name(Inode.avg_namelen)
+                name += "/"
+                if name not in names:
+                    names.append(names)
+                    dir = self.new_entry(name, isdir=True)
+                    if self.level < Inode.avg_depth:
+                        dir.populate()
+                    break
 
         # Shuffle the directory so that directories won't always
-        # be the last few dentries.
-        random.shuffle(self.data)
+        # be the last few dentries. (Disabled for consistency)
+        # random.shuffle(self.data)
 
     def print_dir(self, prefix=""):
         if not self.isdir:

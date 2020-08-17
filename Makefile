@@ -3,7 +3,7 @@ TARGET   = fsemu
 
 CC       = gcc
 # compiling flags here
-CFLAGS   = -Wall -g -O0 -I./include \
+CFLAGS   = -Wall -g -Og -I./include \
 		   -Wno-unused-variable -Wno-unused-function
 
 LINKER   = gcc
@@ -31,7 +31,7 @@ $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 
 .PHONY: clean
 clean:
-	$(rm) $(OBJECTS)
+	$(rm) $(OBJDIR)/*
 	$(rm) $(TARGET)
 
 .PHONY: remove

@@ -21,6 +21,17 @@
 
 #include "fsemu.h"
 
+struct hfs_stat {
+	uint32_t	st_ino;
+	uint32_t	st_size;
+	uint32_t	st_blocks;
+	uint32_t	st_nlink;
+	uint32_t	st_type;
+	time_t		st_accesstime;
+	time_t		st_modifytime;
+	time_t		st_changetime;
+};
+
 int fs_mount(unsigned long size);
 int fs_unmount(void);
 int fs_open(const char *pathname);
@@ -34,6 +45,10 @@ int fs_rename(const char *oldpath, const char *newpath);
 unsigned int fs_lseek(int fd, unsigned int off);
 unsigned int fs_read(int fd, void *buf, unsigned int count);
 unsigned int fs_write(int fd, void *buf, unsigned int count);
+int fs_reset(void);
+int fs_symlink(const char *target, const char *linkpath);
+int fs_readlink(const char *pathname, char *buf, size_t bufsize);
+int fs_stat(const char *pathname, struct hfs_stat *statbuf);
 
 /* system call IDs */
 
@@ -50,6 +65,10 @@ unsigned int fs_write(int fd, void *buf, unsigned int count);
 #define SYS_read	10
 #define SYS_write	11
 #define SYS_rename	12
+#define SYS_reset   13
+#define SYS_symlink	14
+#define SYS_readlink 15
+#define SYS_stat	16
 
 // Debug functions
 // If around declarations because these functions should
