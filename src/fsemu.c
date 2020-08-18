@@ -19,9 +19,6 @@
 
 static size_t fs_size;	// size of file system.
 
-/* File descriptors */
-struct file openfiles[MAXOPENFILES];
-
 /**
  * Prints out a pretentious preamble.
  */ 

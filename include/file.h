@@ -11,6 +11,8 @@
 
 #include <stdint.h>
 
+#define MAXOPENFILES    32
+
 typedef unsigned int	foff_t;     // R/W offset value
 
 /**
@@ -23,5 +25,7 @@ struct file {
     foff_t          offset;
 	struct hfs_dentry	*f_dentry;
 };
+
+extern struct file openfiles[MAXOPENFILES];
 
 #endif  // __FILE_H__

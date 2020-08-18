@@ -10,6 +10,7 @@
 #include "fserror.h"
 #include "util.h"
 #include "fsemu.h"
+#include "file.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -28,6 +29,8 @@ char *fs = NULL;
 struct hfs_superblock *sb;
 struct hfs_inode *inodes;
 char *bitmap;
+
+struct file openfiles[MAXOPENFILES];
 
 #ifdef _HFS_INLINE_DIRECTORY
 static inline void inode_set_inline_flag(struct hfs_inode *inode)

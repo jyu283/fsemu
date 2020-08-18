@@ -21,6 +21,8 @@
 
 #include "fsemu.h"
 
+#include <time.h>
+
 struct hfs_stat {
 	uint32_t	st_ino;
 	uint32_t	st_size;
