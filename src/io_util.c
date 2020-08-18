@@ -139,9 +139,7 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 		printf("[Inline directory]\n");
 		struct hfs_dentry *inline_dent;
 		print_inode(dir, ".");
-		puts("");
 		print_inode(&inodes[dir->data.inline_dir.p_inum], "..");
-		puts("");
 		for_each_inline_dent(inline_dent, dir) {
 			if (!inline_dent->reclen)
 				break;
