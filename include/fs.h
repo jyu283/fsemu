@@ -37,8 +37,8 @@
 #define BLKADDR(x)	((void *)(fs + x * BSIZE))
 
 // Uncomment the following macros to enable the corresponding features.
-// #define _HFS_INLINE_DIRECTORY
-// #define _HFS_DIRHASH
+#define _HFS_INLINE_DIRECTORY
+#define _HFS_DIRHASH
 
 /*
  * Simple File System layout diagram:
@@ -221,5 +221,17 @@ static inline int inum(struct hfs_inode *i)
 {
 	return (i - inodes);
 }
+
+#define MAXOPENFILES    32
+
+/* 
+ * Plan to simulate processes with threads. By which time
+ * things like the openfiles array should be a property of
+ * each individual process. Right now we consider the entire
+ * emulator as a single process -- which of course it is but
+ * in a difference sense.
+ */
+
+extern struct file openfiles[MAXOPENFILES];
 
 #endif  // __FS_H__
