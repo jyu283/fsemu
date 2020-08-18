@@ -16,13 +16,24 @@ int maxFileNameLength = 20;
 int minDirNameLength = 3;
 int maxDirNameLength = 20;
 
-
+int IF_UNIFORM = 0;
+#if !IF_UNIFORM
 int narrowMinWidth = 1;
 int narrowMaxWidth = 5;
 int moderateMinWidth = 5;
 int moderateMaxWidth = 10;
 int wideMinWidth = 10;
 int wideMaxWidth = 15;
+#endif
+
+#if IF_UNIFORM
+int narrowMinWidth = 1;
+int narrowMaxWidth = 2;
+int moderateMinWidth = 3;
+int moderateMaxWidth = 4;
+int wideMinWidth = 5;
+int wideMaxWidth = 6;
+#endif
 
 int shortMinName = 2;
 int shortMaxName = 10;
@@ -104,6 +115,7 @@ int printTree (dir * Dir, char* path, FILE * out){
   //for loop to recursively print directories
   dir * currD = Dir->dirs;
   char * newpath = (char*) malloc(strlen(path)+strlen(Dir->name)+5);
+  assert(newpath);
   sprintf( newpath, "%s%s/", path, Dir->name);
   while (currD != NULL){
     printTree( currD, newpath, out);
@@ -127,6 +139,8 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
     //read in new name
     char * parentPath = (char *)malloc(sizeof(char)*parentNameLength);
     char * prefix = (char *) malloc(sizeof(char) * 2);
+    assert(parentPath);
+    assert(prefix);
     char c;
     long int currPos = ftell(in);
     for(int i = 0; i < parentNameLength; i++){
@@ -152,6 +166,7 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
     }
     //printf("before name building\n");
     char * name = (char *)malloc(sizeof(char)*25);
+    assert(name);
     int nameLength = parentNameLength;                                                                                 
     //build name                                                                                                      
     c = fgetc(in);
@@ -169,9 +184,11 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
       //allocate file to parent and fill
       if(parent->files == NULL){
 	parent->files = (struct file*)malloc(sizeof(file));
+	assert(parent->files);
 	parent->files->next = NULL;
 	currf = parent->files;
 	currf->name = (char*) malloc(strlen(name));
+	assert(currf->name);
 	sprintf(currf->name, "%s", name);
 	//currf->length = sizeof(currf->name);
 	//currf->next = NULL;
@@ -183,6 +200,7 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
 	currf->next = newF;
 	currf = currf->next;
 	currf->name = (char*) malloc(strlen(name));
+	assert(currf->name);
 	sprintf(currf->name, "%s", name);
 	//currf->length = sizeof(currf->name);
 	currf->next = NULL;
@@ -202,10 +220,12 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
       if(parent->dirs == NULL){
 	//printf("first new dir\n");
         parent->dirs = (struct dir*)malloc(sizeof(dir));
+	assert(parent->dirs);
         parent->dirs->next = NULL;
 	parent->dirs->parent = parent;
         currd = parent->dirs;
         currd->name = (char*) malloc(strlen(name));
+	assert(currd->name);
         sprintf(currd->name, "%s", name);
         //currd->length = sizeof(currd->name);
         currd->next = NULL;
@@ -219,6 +239,7 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
         currd->next = newD;
         currd = currd->next;
         currd->name = (char*) malloc(strlen(name));
+	assert(currd->name);
 	currd->parent = parent;
         sprintf(currd->name, "%s", name);
         //currd->length = sizeof(currd->name);
@@ -228,6 +249,7 @@ void fileBuildTree(dir * parent, FILE * in, int parentNameLength, char * path, i
  
       //recurse
       char * newPath = (char*)malloc((strlen(name)+parentNameLength)*sizeof(char));
+      assert(newPath);
       sprintf(newPath, "%s%s/",path, name); 
       fileBuildTree(currd, in, nameLength, newPath, depth+1);
       //currd = currd->next;
@@ -247,6 +269,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
     parent->files = NULL;
   }else{
     parent->files = (struct file*)malloc(sizeof(file));
+    assert(parent->files);
     parent->files->next = NULL;
   }
 
@@ -254,6 +277,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
     parent->dirs = NULL;
   }else{
     parent->dirs = (struct dir*)malloc(sizeof(dir));
+    assert(parent->dirs);
     parent->dirs->next = NULL;
     parent->dirs->parent = parent;
   }
@@ -272,6 +296,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
 
     if (i == 0){
       curr->name= (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -284,6 +309,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
       curr->next = newF;
       curr = curr->next;
       curr->name = (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -307,6 +333,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
     int nameLen = nameNum+minDirNameLength+1;
     if (i == 0){
       currD->name= (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       //currD->length = sizeof(currD->name);
@@ -319,6 +346,7 @@ void uniformBuildTree (dir* parent, int depth, int numDirs, int numFiles, int mi
       currD->next = newD;
       currD = currD->next;
       currD->name = (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       currD->parent = parent;
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
@@ -351,6 +379,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
     parent->files = NULL;
   }else{
     parent->files = (struct file*)malloc(sizeof(file));
+    assert(parent->files);
     parent->files->next = NULL;
   }
 
@@ -358,6 +387,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
     parent->dirs = NULL;
   }else{
     parent->dirs = (struct dir*)malloc(sizeof(dir));
+    assert(parent->dirs);
     parent->dirs->next = NULL;
     parent->dirs->parent = parent;
   }
@@ -370,6 +400,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
 
     if (i == 0){
       curr->name= (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -382,6 +413,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
       curr->next = newF;
       curr = curr->next;
       curr->name = (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -400,6 +432,7 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
     int nameLen = nameNum+minDirNameLength+1;
     if (i == 0){
       currD->name= (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       //currD->length = sizeof(currD->name);
@@ -411,8 +444,9 @@ void buildTree (dir* parent, int depth, int numDirs, int numFiles,int minWidth, 
       currD->next = newD;
       currD = currD->next;
       currD->name = (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       currD->parent = parent;
-
+      
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       //currD->length = sizeof(currD->name);
@@ -447,6 +481,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
     parent->files = NULL;
   }else{
     parent->files = (struct file*)malloc(sizeof(file));
+    assert(parent->files);
     parent->files->next = NULL;
   }
 
@@ -454,6 +489,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
     parent->dirs = NULL;
   }else{
     parent->dirs = (struct dir*)malloc(sizeof(dir));
+    assert(parent->dirs);
     parent->dirs->next = NULL;
     parent->dirs->parent = parent;
   }
@@ -466,6 +502,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
 
     if (i == 0){
       curr->name= (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -478,6 +515,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
       curr->next = newF;
       curr = curr->next;
       curr->name = (char*) malloc(strlen(fileNames[nameNum])+(sizeof(int)*8+1));
+      assert(curr->name);
       sprintf(curr->name, "%s%d", fileNames[nameNum], fileNameUsage[nameNum]);
       fileNameUsage[nameNum]++;
       //curr->length = sizeof(curr->name);
@@ -496,6 +534,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
     int nameLen = nameNum+minDirNameLength+1;
     if (i == 0){
       currD->name= (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
       dirNameUsage[nameNum]++;
       //currD->length = sizeof(currD->name);
@@ -507,6 +546,7 @@ void defaultBuildTree (dir* parent, int depth, int numDirs, int numFiles, int de
       currD->next = newD;
       currD = currD->next;
       currD->name = (char*) malloc(strlen(dirNames[nameNum])+(sizeof(int)*8+1));
+      assert(currD->name);
       currD->parent = parent;
 
       sprintf(currD->name, "%s%d", dirNames[nameNum], dirNameUsage[nameNum]);
@@ -632,10 +672,18 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 		 int tLocal, int numEntries, FILE * out)
 {
   //How deep is the tree
-  int maxTreeDepth = TreeDepth(root);
+  int maxTreeDepth = TreeDepth(root) - 1;
   int minDepth;
   int maxDepth;
 
+  if(Depth == 'M' && maxTreeDepth == 1){
+    printf("Program Aborted: Workload of this depth on this shallow a tree is not possible\n");
+    exit(-1);
+  }else if(Depth == 'D' && (maxTreeDepth == 1 || maxTreeDepth == 2)){
+    printf("Program Aborted: Workload of this depth on this shallow a tree is not possible\n");
+    exit(-1);
+  }
+  
   if(Depth == 'A'){
     minDepth = 1;
     maxDepth = maxTreeDepth;
@@ -655,22 +703,27 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
       maxDepth = 2 * maxTreeDepth/3 + 1;
     }else{
       minDepth = maxTreeDepth/3 + 2;
-      maxDepth = 2 * maxTreeDepth/3 + 2;
+      maxDepth = 2 * maxTreeDepth/3 + 1;
     }
   }else if( Depth == 'D' ){
     if(maxTreeDepth % 3 == 0){
       minDepth = 2 * maxTreeDepth/3 + 1;
-      maxDepth = 3 * maxTreeDepth/3;
+      maxDepth = maxTreeDepth;
     }else if(maxTreeDepth % 3 == 1){
       minDepth = 2 * maxTreeDepth/3 + 2;
-      maxDepth = 3 * maxTreeDepth/3 + 1;
+      maxDepth = maxTreeDepth;
     }else{
-      minDepth = 2 * maxTreeDepth/3 + 3;
-      maxDepth = 3 * maxTreeDepth/3 +2;
+      minDepth = 2 * maxTreeDepth/3 + 2;
+      maxDepth = maxTreeDepth;
     }  
-  }else{
+  }else if(Depth == 'R'){
     //This is for Random Min Max Depth
     while(1){
+      if( maxTreeDepth == 1 ){
+	minDepth = 1;
+	maxDepth = 1;
+	break;
+      }
       int r1 = rand() % maxTreeDepth + 1;
       int r2 = rand() % maxTreeDepth + 1;
 
@@ -685,12 +738,19 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	break;
       }
     }
+  }else{
+    printf("Inappropiate Depth Setting\n");
+    exit(-1);
   }
+
+  printf("minDepth = %d, maxDepth = %d, maxLevel= %d\n", minDepth, maxDepth, maxTreeDepth);
 
   //Pick Starting Location Depth
   int depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
+  printf("Starting Depth = %d\n", depth);
   //Pick Starting Location ... curr ... the parent directory
   int whichAtDepth = rand() % depthInfoArray[depth].num;
+  
   dir * curr = depthInfoArray[depth].first;
 
   for( int i = 0; i< whichAtDepth; i++ ){
@@ -708,10 +768,12 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
   assert(lastPrint);
 
   sprintf(tempPath, "%s/", curr->name);
-  dir * parent = curr->parent;
-  while(parent != NULL){
-    sprintf(currPath, "%s/%s", parent->name, tempPath);
-    parent = parent->parent;
+  dir * Parent = curr->parent;
+  while(Parent != NULL){
+    sprintf(currPath, "%s/%s", Parent->name, tempPath);
+    sprintf(tempPath, "%s", currPath);
+    //printf("currPath = %s\n", currPath);
+    Parent = Parent->parent;
   }
   //pick a file or directory in curr
   //print path with dir or file name tacked on.
@@ -729,8 +791,8 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
     for(int i = 1; i <= whichFile; i++){
       currF = currF->next;
     }
-    sprintf( lastPrint, "%s%s\n", currPath, currF->name);
-    fprintf( out, "%s", lastPrint);
+    sprintf( lastPrint, "%s%s", currPath, currF->name);
+    fprintf( out, "%s\n", lastPrint);
     
   }else{
     //pick new dir                                                                                               
@@ -746,8 +808,8 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
     for(int i = 1; i <= whichDir; i++){
       currD = currD->next;
     }
-    sprintf( lastPrint,"%s%s/\n", currPath, currD->name);
-    fprintf( out, "%s", lastPrint);
+    sprintf( lastPrint,"%s%s/", currPath, currD->name);
+    fprintf( out, "%s\n", lastPrint);
   }
 
 
@@ -755,9 +817,10 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
  
   //Loop once for each entry needed
   for(int i = 0; i < numEntries-1 ; i++){
+    //printf("Next Entry\n");
     if(rand() % 100 <= tLocal){
       //reprint lastPrint
-      fprintf( out, "%s", lastPrint);
+      fprintf( out, "%s\n", lastPrint);
       continue;
     }
     if(strictSLocal){
@@ -767,7 +830,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
       while(counter < limit){
 	int stay = rand() % 100;
 	if(stay <= sLocal){
-	  if(rand() % 2 == 0 || curr->dirs == NULL){
+	  if((rand() % 2 == 0 || curr->dirs == NULL) && curr->files != NULL){
 	    //pick new file
 	    int numFiles = 0;
 	    file * currF = curr->files;
@@ -781,10 +844,10 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    for(int i = 1; i <= whichFile; i++){
 	      currF = currF->next;
 	    }
-	    sprintf( lastPrint, "%s%s\n", currPath, currF->name);
-	    fprintf( out, "%s", lastPrint);
+	    sprintf( lastPrint, "%s%s", currPath, currF->name);
+	    fprintf( out, "%s\n", lastPrint);
 	    break;
-	  }else{
+	  }else if( curr->dirs != NULL ){
 	    //pick new dir
 	    int numDirs = 0;
             dir * currD = curr->dirs;
@@ -798,18 +861,21 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             for(int i = 1; i <= whichDir; i++){
 	      currD = currD->next;
             }
-	    sprintf( lastPrint, "%s%s/\n", currPath, currD->name);
-	    fprintf( out, "%s", lastPrint);
+	    sprintf( lastPrint, "%s%s/", currPath, currD->name);
+	    fprintf( out, "%s\n", lastPrint);
             break;
+	  }else{
+	    printf("Current directory doesn't hav any children");
+	    exit(-1);
 	  }
 
 	}else{
 	  int upORdown;
 
-	  if((curr->dirs == NULL && depth != minDepth) || depth == maxDepth){
+	  if((curr->dirs == NULL && depth != minDepth) || (depth == maxDepth && minDepth != maxDepth)){
 	    upORdown = 0;
 	    counter++;
-	  }else if(depth == minDepth && curr->dirs != NULL){
+	  }else if(depth == minDepth && curr->dirs != NULL && minDepth != maxDepth){
 	    upORdown = 1;
 	    counter++;
 	  }else if((depth != minDepth || depth != maxDepth) && curr->dirs != NULL){
@@ -821,7 +887,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    }
 	    counter++;
 	  }else{
-	    printf("Subtree chosen is too shallow and has no children\n");
+	    printf("Program Aborted: Subtree chosen is too shallow and has no children\n");
 	    exit(-1);
 	  }
 
@@ -834,10 +900,13 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    char c = currPath[start];
 	    while( c != '/' ){
 	      start = start - 1;
+	      assert(start > -1);
 	      c = currPath[start];
 	    }
+	    assert(c == '/');
 	    currPath[start+1] = '\0';
 	    depth = depth - 1;
+	    //printf("New Depth = %d\n", depth);
 	  }else{
 	    //move dir down
             //pick new child dir move down
@@ -855,8 +924,10 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             }
 
             curr = currD;
-	    sprintf(currPath, "%s%s/", currPath, curr->name);
+	    sprintf( tempPath, "%s%s/", currPath, currD->name);
+	    sprintf(currPath, "%s", tempPath);
             depth++;
+	    //printf("New Depth = %d\n", depth);
 	  }
 	}
       }
@@ -868,6 +939,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	//major move across tree;
 	//Pick Starting Location Depth       
 	int depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
+	//printf("New Depth = %d\n", depth);
 	//Pick Starting Location ... curr ... the parent directory
 	int whichAtDepth = rand() % depthInfoArray[depth].num;
 	dir * curr = depthInfoArray[depth].first;
@@ -878,10 +950,11 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 
 	//Walk path back to root to get build path
 	sprintf(tempPath, "%s/", curr->name);
-	parent = curr->parent;
-	while(parent != NULL){
-	  sprintf(currPath, "%s/%s", parent->name, tempPath);
-	  parent = parent->parent;
+	Parent = curr->parent;
+	while(Parent != NULL){
+	  sprintf(currPath, "%s/%s", Parent->name, tempPath);
+	  sprintf(tempPath, "%s", currPath);
+	  Parent = Parent->parent;
 	}
 	fprintf(out, "%s\n", currPath);
 	sprintf(lastPrint, "%s", currPath);
@@ -892,9 +965,10 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
       int limit = 10;
       int counter = 0;
       while(counter < limit){
+	//printf("Depth= %d\n", depth);
         int stay = rand() % 100;
         if(stay <= sLocal){
-          if(rand() % 2 == 0 || curr->dirs == NULL){
+          if((rand() % 2 == 0 || curr->dirs == NULL) && curr->files != NULL){
             //pick new file                                                                                              
             int numFiles = 0;
             file * currF = curr->files;
@@ -908,10 +982,10 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             for(int i = 1; i <= whichFile; i++){
 	      currF = currF->next;
             }
-	    sprintf( lastPrint, "%s%s\n", currPath, currF->name);
-	    fprintf( out, "%s", lastPrint);
+	    sprintf( lastPrint, "%s%s", currPath, currF->name);
+	    fprintf( out, "%s\n", lastPrint);
             break;
-          }else{
+          }else if(curr->dirs != NULL){
             //pick new dir                                                                                               
             int numDirs = 0;
             dir * currD = curr->dirs;
@@ -925,19 +999,22 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             for(int i = 1; i <= whichDir; i++){
               currD = currD->next;
             }
-	    sprintf( lastPrint, "%s%s/\n", currPath, currD->name);
-	    fprintf( out, "%s", lastPrint);
+	    sprintf( lastPrint, "%s%s/", currPath, currD->name);
+	    fprintf( out, "%s\n", lastPrint);
             break;
-          }
+          }else{
+	    printf("Somehow dir does not have children\n");
+	    exit(-1);
+	  }
 
 
         }else{
           int upORdown;
           //need to define min and max Depth and track active depth
-          if((curr->dirs == NULL && depth != minDepth) || depth == maxDepth){
+          if((curr->dirs == NULL && depth != minDepth) || (depth == maxDepth && minDepth != maxDepth)){
             upORdown = 0;
 	    counter++;
-          }else if(depth == minDepth && curr->dirs != NULL){
+          }else if(depth == minDepth && curr->dirs != NULL && minDepth != maxDepth){
             upORdown = 1;
 	    counter++;
           }else if((depth != minDepth || depth != maxDepth) && curr->dirs != NULL){
@@ -959,10 +1036,11 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    }
 
 	    sprintf(tempPath, "%s/", curr->name);
-	    parent = curr->parent;
-	    while(parent != NULL){
-	      sprintf(currPath, "%s/%s", parent->name, tempPath);
-	      parent = parent->parent;
+	    Parent = curr->parent;
+	    while(Parent != NULL){
+	      sprintf(currPath, "%s/%s", Parent->name, tempPath);
+	      sprintf(tempPath, "%s", currPath);
+	      Parent = Parent->parent;
 	    }
 	    fprintf(out, "%s\n", currPath);
 	    sprintf(lastPrint, "%s", currPath);
@@ -975,16 +1053,20 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    curr = curr->parent;
 
 	    int len = strlen(currPath);
-            int start =len - 2;
+            int start = len - 2;
             char c = currPath[start];
-            while( c !='/' ){
+	    //printf("%s\n", currPath);
+            while( c != '/' ){
+	      //printf("start = %d, c = %c\n", start, c);
 	      start = start - 1;
+	      assert(start > -1);
 	      c = currPath[start];
             }
             currPath[start+1] ='\0';
 
             depth = depth - 1;
-          }else if(upORdown = 1){
+	    //printf("New Depth = %d\n", depth);
+          }else if(upORdown == 1){
             //move dir down
             //pick new child dir move down
 	    int numDirs = 0;
@@ -1001,8 +1083,11 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             }
 
 	    curr = currD;
-	    sprintf(currPath, "%s%s/", currPath, curr->name);
+	    
+	    sprintf(tempPath, "%s%s/", currPath, curr->name);
+	    sprintf(currPath, "%s", tempPath);
 	    depth++;
+	    //printf("New Depth = %d\n", depth);
           }
         }
       }
@@ -1061,7 +1146,7 @@ int main(int argc, char *argv[]){
     numDirs = rand() % (maxNumDirs - minNumDirs + 1) + minNumDirs;
     numFiles = rand() % (maxNumFiles - minNumFiles + 1) + minNumFiles;
     //int depth = maxTreeDepth;
-    chosenDepth = rand() % (maxTreeDepth - minTreeDepth + 1) + minTreeDepth;
+    wDepth = rand() % (maxTreeDepth - minTreeDepth + 1) + minTreeDepth;
     isDefault = true;
     //defaultBuildTree(&root, depth, numDirs, numFiles);
   }
@@ -1076,6 +1161,10 @@ int main(int argc, char *argv[]){
 	printf("Not enough arguments for building a new tree\n");
 	return -1;
       }
+      bool isNarrow = false;
+      bool isModerate = false;
+      bool isWide = false;
+      
       for(int i = 2; i<12; i = i+2){
 	if(strcmp(argv[i], "minD=") == 0){
 	  if(strcmp(argv[i+1], "R") == 0){
@@ -1093,13 +1182,17 @@ int main(int argc, char *argv[]){
 	  if(strcmp(argv[i+1], "N") == 0){
 	    minWidth = narrowMinWidth;
 	    maxWidth = narrowMaxWidth;
+	    isNarrow = true;
           }else if(strcmp(argv[i+1], "M") == 0){
 	    minWidth = moderateMinWidth;
 	    maxWidth = moderateMaxWidth;
+	    isModerate = true;
           }else if(strcmp(argv[i+1], "W") == 0){
 	    minWidth = wideMinWidth;
 	    maxWidth = wideMaxWidth;
+	    isWide = true;
           }else if(strcmp(argv[i+1], "R") == 0){
+	    //Should I set these to random numbers instead
 	    minWidth = narrowMinWidth;
 	    maxWidth = wideMaxWidth;
           }else{
@@ -1126,6 +1219,7 @@ int main(int argc, char *argv[]){
 	}else if(strcmp(argv[i], "Form=") == 0){
 	  if(strcmp(argv[i+1], "U") == 0){
 	    isUniform = true;
+	    IF_UNIFORM = 1;
           }else if(strcmp(argv[i+1], "R") == 0){
 	    isUniform = false;
           }else{
@@ -1148,8 +1242,20 @@ int main(int argc, char *argv[]){
 	printf("chosenDepth = %d\n", chosenDepth);
       }
 
+      if( isNarrow == true && isUniform == true){
+	minWidth = 1;
+	maxWidth = 2;
+      }else if(isModerate == true && isUniform == true){
+	minWidth = 3;
+	maxWidth = 4;
+      }else if(isWide == true && isUniform == true){
+	minWidth = 5;
+	maxWidth = 6;
+      }
+
       numDirs = rand() % (maxWidth - minWidth + 1) + minWidth;
       numFiles = rand() % (maxWidth - minWidth + 1) + minWidth;
+      printf("numFiles= %d, numdirs = %d\n", numFiles, numDirs);
       /*if(isUniform){
 	uniformBuildTree(&root, depth, numDirs, numFiles, minName, maxName);
       }else{
@@ -1178,6 +1284,7 @@ int main(int argc, char *argv[]){
 	c = fgetc(in);
       }
       root.name = (char *)malloc(sizeof(char)*25);
+      assert(root.name);
       //keep track of name length?
       //build name
       c = fgetc(in);
@@ -1334,10 +1441,12 @@ int main(int argc, char *argv[]){
 
   //CAll workload Gen                                                                                                                  
   if ( doWorkload == true ){
-    workloadGen(&root, "root/", chosenDepth, sLocal, isStrict, tLocal, numEntries, workOut);
+    workloadGen(&root, "root/", wDepth, sLocal, isStrict, tLocal, numEntries, workOut);
   }
 
-
+  
+#define DEPTH_ARRAY_TEST 0
+#if DEPTH_ARRAY_TEST
   for( int i = 0; i < maxTreeDepth; i++ ){
     printf("DEPTH %d\n\n", i);
     dir * curr = depthInfoArray[i].first;
@@ -1347,7 +1456,7 @@ int main(int argc, char *argv[]){
     }
     printf("\n\n");
   }
-  
+#endif
 
 
 
