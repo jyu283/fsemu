@@ -231,6 +231,31 @@ out:
 }
 
 /**
+ * Change the shell's working directory
+ */
+static int cd(const char *path)
+{
+	int ret;
+	if ((ret = fs_chdir(path)) < 0) {
+		fs_pstrerror(ret, "cd");
+		return -1;
+	}
+	return 0;
+}
+
+/**
+ * Handles the cd [path] command.
+ */
+static void cd_handler(void)
+{
+	if (argc != 2) {
+		printf("Usage: cd [path]\n");
+		return;
+	}
+	cd(argv[1]);
+}
+
+/**
  * Handles the show_inline command.
  */
 static void show_inline_handler()
@@ -337,7 +362,7 @@ static void cat_handler()
 static void ls_handler()
 {
 	if (argc == 1) {
-		ls("/");  // This will become cwd
+		ls(NULL);  // This will become cwd
 	} else {
 		for (int i = 1; i < argc; i++) {
 			if (ls(argv[i]) < 0) {
@@ -395,6 +420,9 @@ static int process_args()
 		return 0;
 	} else if (strcmp(argv[0], "istat") == 0) {
 		istat_handler();
+		return 0;
+	} else if (strcmp(argv[0], "cd") == 0) {
+		cd_handler();
 		return 0;
 	}
 
