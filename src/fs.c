@@ -30,7 +30,15 @@ struct hfs_superblock *sb;
 struct hfs_inode *inodes;
 char *bitmap;
 
+/**
+ * File descriptors.
+ */
 struct file openfiles[MAXOPENFILES];
+
+/**
+ * Current working directory.
+ */
+struct hfs_inode *cwd;
 
 #ifdef _HFS_INLINE_DIRECTORY
 static inline void inode_set_inline_flag(struct hfs_inode *inode)
@@ -752,7 +760,7 @@ static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
 
-	prev = get_root_inode();
+	prev = (pathname[0] == '/') ? get_root_inode() : cwd;
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
@@ -1483,6 +1491,24 @@ void print_features(void)
 	pr_info("\n");
 }
 
+/**
+ * Change working directory.
+ */
+int fs_chdir(const char *pathname)
+{
+	struct hfs_dentry *dent;
+	struct hfs_inode *dir;
+
+	if (!(dent = lookup(pathname)))
+		return -ENOFOUND;
+	dir = dentry_get_inode(dent); 
+	if (dir->type != T_DIR)
+		return -EINVTYPE;
+	
+	cwd = dir;
+	return 0;
+}
+
 /*
  * Allocates space for file system in memory.
  */
@@ -1557,6 +1583,8 @@ int fs_mount(unsigned long size)
 	close(fd); 
 
 	sb->last_mounted = time(NULL);
+
+	cwd = get_root_inode();
 
 	pr_info("File system successfully mounted.\n");
 	print_features();

@@ -51,6 +51,7 @@ int fs_reset(void);
 int fs_symlink(const char *target, const char *linkpath);
 int fs_readlink(const char *pathname, char *buf, size_t bufsize);
 int fs_stat(const char *pathname, struct hfs_stat *statbuf);
+int fs_chdir(const char *pathname);
 
 /* system call IDs */
 
@@ -71,6 +72,7 @@ int fs_stat(const char *pathname, struct hfs_stat *statbuf);
 #define SYS_symlink	14
 #define SYS_readlink 15
 #define SYS_stat	16
+#define SYS_chdir	17
 
 // Debug functions
 // If around declarations because these functions should

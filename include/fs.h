@@ -234,4 +234,9 @@ static inline int inum(struct hfs_inode *i)
 
 extern struct file openfiles[MAXOPENFILES];
 
+/**
+ * Current working directory.
+ */
+extern struct hfs_inode *cwd;
+
 #endif  // __FS_H__
