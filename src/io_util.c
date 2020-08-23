@@ -160,13 +160,16 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 
 /**
  * ls - list directory contents
+ * NOTE: This should be re-implemented once additional system calls
+ * such as getdents have been implemented.
  */
 int ls(const char *pathname)
 {
 	struct hfs_inode *src;
-	char *name = "/";
-	if (strcmp(pathname, "/") == 0) {
-		src = get_root_inode();
+	const char *name;
+	if (!pathname) {
+		src = cwd;
+		name = "";
 	} else {
 		struct hfs_dentry *src_dent;
 		if (!(src_dent = lookup(pathname)))
