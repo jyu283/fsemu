@@ -48,7 +48,7 @@ int maxChosenDepth;
 
 
 
-const char* fileNames[] = {"a", "uw", "log", "file", "trees", "flower", "project", "download", "documents", "photograph", "foobashbash", "bashbashbash", "foobarbazbash", "foobarbazzbash", "foobarbazfoobar", "starwarsanewhope", "empirestrikesback", "swrevengeofthesith", "c3por2d2bb8l3atat!-"/* ... etc ... */ };
+const char* fileNames[] = {"a", "cu", "txt", "file", "trees", "flower", "account", "document", "downloads", "collection", "foobashbash", "bashbashbash", "foobarbazbash", "foobarbazzbash", "foobarbazfoobar", "starwarsanewhope", "empirestrikesback", "swrevengeofthesith", "c3por2d2bb8l3atat!-"/* ... etc ... */ };
 int fileNameUsage[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 const char* extNames[] = {".c", ".py", ".txt"};
 const char* dirNames[] = {"uw", "log", "ewok", "users", "recent", "project", "download", "documents", "photograph", "development", "peanutbutter", "constellation", "antidepressant", "thefinalfrontier", "milleniumfalcon", "thunder&lightning", "unsatisfactoriness", "inagalaxyfarfaraway"};
@@ -934,7 +934,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
       //print new location
       continue;
     }else{
-      int moveChance = 5;
+      int moveChance = 20;
       if(rand()% 100 <= moveChance){
 	//major move across tree;
 	//Pick Starting Location Depth       
