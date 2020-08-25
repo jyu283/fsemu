@@ -39,8 +39,6 @@ int main(int argc, char *argv[])
 
 	fs_size = MAXFSSIZE;
 
-	print_title();
-
 	if (fs_mount(fs_size) < 0) {
 		printf("Error: failed to mount file system.\n");
 		exit(0);
@@ -56,6 +54,8 @@ int main(int argc, char *argv[])
 		printf("Starting shell in batch mode...\n");
 	} else {
 		shell_fp = stdin;
+		print_title();
+
 		printf("Starting shell in interactive mode...\n");
 	}
 
