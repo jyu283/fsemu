@@ -26,6 +26,7 @@ void benchmark(const char *input_file);
 void show_inline(void);
 void show_regular(void);
 void hfs_dirhash_dump(void);
+void hfs_dirhash_clear(void);
 #endif  // HFS_DEBUG
 
 #endif  // __UTIL_H__

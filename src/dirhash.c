@@ -447,3 +447,12 @@ void hfs_dirhash_dump(void)
     lookup_hit_cnt = 0;
 #endif
 }
+
+/**
+ * Debug function: clear dirhash.
+ */
+void hfs_dirhash_clear(void)
+{
+    hfs_dirhash_free();
+    hfs_dirhash_init();
+}

@@ -282,6 +282,13 @@ static void dirhash_dump_handler()
 #endif
 }
 
+static void dirhash_clear_handler()
+{
+#ifdef HFS_DEBUG
+	hfs_dirhash_clear();
+#endif
+}
+
 /**
  * Handles readl command (readlink)
  */
@@ -373,61 +380,48 @@ static void ls_handler()
 }
 
 /**
- * Handles istat [path] command.
+ * Handles stat [path] command.
  */
-static void istat_handler()
+static void stat_handler()
 {
 	if (argc != 2) {
-		printf("Usage: istat [pathname]\n");
+		printf("Usage: stat [pathname]\n");
 		return;
 	}
 
 	filestat(argv[1]);
 }
 
+
+#define HFS_BUILTIN_COMMAND(x) \
+	if (strcmp(argv[0], #x) == 0) {	\
+		x ## _handler();	\
+		return 0;	\
+	}
+
 /**
  * Process a list of arguments broken down by process()
  */
 static int process_args()
 {
-	// Handle "user programs" such as ls
-	if (strcmp(argv[0], "ls") == 0) {
-		ls_handler();
-		return 0;
-	} else if (strcmp(argv[0], "cat") == 0) {
-		cat_handler();
-		return 0;
-	} else if (strcmp(argv[0], "load") == 0) {
-		load_handler();
-		return 0;
-	} else if (strcmp(argv[0], "benchmark") == 0) {
-		benchmark_handler();
-		return 0;
-	} else if (strcmp(argv[0], "show_inline") == 0) {
-		show_inline_handler();
-		return 0;
-	} else if (strcmp(argv[0], "show_regular") == 0) {
-		show_regular_handler();
-		return 0;
-	} else if (strcmp(argv[0], "dirhash_dump") == 0) {
-		dirhash_dump_handler();
-		return 0;
-	} else if (strcmp(argv[0], "readl") == 0) {
-		readl_handler();
-		return 0;
-	} else if (strcmp(argv[0], "loadf") == 0) {
-		loadf_handler();
-		return 0;
-	} else if (strcmp(argv[0], "istat") == 0) {
-		istat_handler();
-		return 0;
-	} else if (strcmp(argv[0], "cd") == 0) {
-		cd_handler();
-		return 0;
-	}
+	/* Check for built in commands in argv[0], see macro above */
 
-	// system call handling
+	HFS_BUILTIN_COMMAND(ls);
+	HFS_BUILTIN_COMMAND(cat);
+	HFS_BUILTIN_COMMAND(load);
+	HFS_BUILTIN_COMMAND(benchmark);
+	HFS_BUILTIN_COMMAND(show_inline);
+	HFS_BUILTIN_COMMAND(show_regular);
+	HFS_BUILTIN_COMMAND(dirhash_dump);
+	HFS_BUILTIN_COMMAND(dirhash_clear);
+	HFS_BUILTIN_COMMAND(readl);
+	HFS_BUILTIN_COMMAND(loadf);
+	HFS_BUILTIN_COMMAND(stat);
+	HFS_BUILTIN_COMMAND(cd);
+
+	/* Default: try to resolve to system call. */	
 	syscall_handler();
+
 	return 0;
 }
 
