@@ -90,8 +90,10 @@ int benchmark_lookup(const char *input_file, int repcount)
 	for (int i = 0; i < repcount; i++) {
 		while (getline(&line, &len, fp) != -1) {
 			line[strlen(line) - 1] = '\0';  // clear trailing \n
-			pathname = line + 2;
-			lookup(pathname);
+			pathname = line;
+			if (!lookup(pathname)) {
+				printf(KRED "Lookup failed: %s\n" KNRM, pathname);
+			}
 		}
 		rewind(fp);
 	}
