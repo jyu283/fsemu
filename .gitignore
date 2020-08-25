@@ -9,3 +9,4 @@
 cachegrind*
 **.bench.sh
 **.out
+test/**
