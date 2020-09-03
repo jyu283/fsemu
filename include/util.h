@@ -27,6 +27,14 @@ void show_inline(void);
 void show_regular(void);
 void hfs_dirhash_dump(void);
 void hfs_dirhash_clear(void);
+
+struct hfs_dirhash_perf_stat {
+	int s_lookup_mcount;
+	int s_lookup_hcount;
+};
+
+void hfs_dirhash_perf_stat(struct hfs_dirhash_perf_stat *statbuf);
+void hfs_dirhash_stat_clear(void);
 #endif  // HFS_DEBUG
 
 #endif  // __UTIL_H__

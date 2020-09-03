@@ -80,15 +80,19 @@ int benchmark_lookup(const char *input_file, int repcount)
 	size_t len = 0;
 	clock_t begin, end;
 	double time;
+	int counter = 0;
+	struct hfs_dirhash_perf_stat statbuf;
 
 	if (!(fp = fopen(input_file, "r"))) {
 		perror("open");
 		return -1;
 	}
 
+	hfs_dirhash_stat_clear();
 	begin = clock();
 	for (int i = 0; i < repcount; i++) {
-		while (getline(&line, &len, fp) != -1) {
+		counter = 0;
+		while (getline(&line, &len, fp) != -1 && ++counter < 300) {
 			line[strlen(line) - 1] = '\0';  // clear trailing \n
 			pathname = line;
 			if (!lookup(pathname)) {
@@ -97,9 +101,18 @@ int benchmark_lookup(const char *input_file, int repcount)
 		}
 		rewind(fp);
 	}
-
 	end = clock();
 	time = (double)(end - begin) / (CLOCKS_PER_SEC / 1000);
+
+	pr_info(KBLD KBLU "%d lookups performed.\n", counter);
+
+	hfs_dirhash_perf_stat(&statbuf);
+	counter = statbuf.s_lookup_hcount + statbuf.s_lookup_mcount;
+	double hitrate = (statbuf.s_lookup_hcount / (double)(counter)) * 100;
+	pr_info("Hits: %d  Misses: %d\n", 
+				statbuf.s_lookup_hcount, statbuf.s_lookup_mcount);
+	pr_info("Hit rate: %d/%d=%.2f%%\n", 
+				statbuf.s_lookup_hcount, counter, hitrate);
 
 	printf("\033[32;1m");
 	printf("Average running time per cycle: %.3fms.\n", time/repcount);

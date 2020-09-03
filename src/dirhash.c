@@ -421,6 +421,33 @@ static void dirhash_table_dump(struct hfs_dirhash_table *dt)
 }
 
 /**
+ * Debug function: clear dirhash.
+ */
+void hfs_dirhash_clear(void)
+{
+    hfs_dirhash_free();
+    hfs_dirhash_init();
+}
+
+#ifdef HFS_DEBUG
+void hfs_dirhash_perf_stat(struct hfs_dirhash_perf_stat *statbuf)
+{
+    if (!statbuf)
+        return;
+    statbuf->s_lookup_hcount = lookup_hit_cnt;
+    statbuf->s_lookup_mcount = lookup_miss_cnt;
+}
+
+void hfs_dirhash_stat_clear(void)
+{
+    lookup_hit_cnt = 0;
+    lookup_miss_cnt = 0;
+    put_conflict_cnt = 0;
+    put_no_conf_cnt = 0;
+}
+#endif  // HFS_DEBUG
+
+/**
  * Debug function: Print out all the contents of dirhash.
  */
 void hfs_dirhash_dump(void)
@@ -441,18 +468,6 @@ void hfs_dirhash_dump(void)
     printf("Total conflict free puts: %d\n", put_no_conf_cnt);
     printf("Total lookup miss count:  %d\n", lookup_miss_cnt);
     printf("Total lookup hit count:   %d\n", lookup_hit_cnt);
-    put_conflict_cnt = 0;
-    put_no_conf_cnt = 0;
-    lookup_miss_cnt = 0;
-    lookup_hit_cnt = 0;
+    hfs_dirhash_stat_clear();
 #endif
-}
-
-/**
- * Debug function: clear dirhash.
- */
-void hfs_dirhash_clear(void)
-{
-    hfs_dirhash_free();
-    hfs_dirhash_init();
 }
