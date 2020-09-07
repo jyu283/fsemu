@@ -28,7 +28,7 @@
 char *fs = NULL;
 struct hfs_superblock *sb;
 struct hfs_inode *inodes;
-char *bitmap;
+char *inobitmap, *bitmap;
 
 /**
  * File descriptors.
@@ -87,8 +87,11 @@ static void init_superblock(size_t size)
 	sb->size = total_blocks;
 	pr_info("Total blocks: %d.\n", total_blocks);
 
-	sb->inodestart = 1;
+	sb->inodebitmapstart = 1;
 	sb->ninodes = inode_blocks * INOPERBLK; 
+	int inode_bitmap_bytes = sb->ninodes / 8;
+	int inode_bitmap_blocks = inode_bitmap_bytes / BSIZE + 1;
+	sb->inodestart = sb->inodebitmapstart + inode_bitmap_blocks;
 
 	sb->bitmapstart = sb->inodestart + inode_blocks;
 
@@ -112,6 +115,7 @@ static inline void read_sb()
 {
 	sb = (struct hfs_superblock *)fs;
 	inodes = BLKADDR(sb->inodestart);
+	inobitmap = BLKADDR(sb->inodebitmapstart);
 	bitmap = BLKADDR(sb->bitmapstart);
 }
 

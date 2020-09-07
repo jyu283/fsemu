@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
+#include <pthread.h>
 
 #define MAXFSSIZE   0x40000000
 #define BSIZE       0x1000      // block size = 4096 bytes 
@@ -38,7 +39,7 @@
 
 // Uncomment the following macros to enable the corresponding features.
 #define _HFS_INLINE_DIRECTORY
-#define _HFS_DIRHASH
+// #define _HFS_DIRHASH
 
 /*
  * Simple File System layout diagram:
@@ -188,6 +189,7 @@ struct hfs_superblock {
 	uint64_t		nfiles;			// number of files
 	uint64_t		datastart;	// data start block
 	uint64_t		nblocks;    // number of data blocks
+	uint64_t		inodebitmapstart;	// start of inode bitmap
 	uint64_t		inodestart;	// start of inodes
 	uint64_t		bitmapstart;	// start of bitmap
 	time_t			creation_time;	// creation time of file system
@@ -197,7 +199,7 @@ struct hfs_superblock {
 extern char *fs;
 extern struct hfs_superblock *sb;
 extern struct hfs_inode *inodes;
-extern char *bitmap;
+extern char *inobitmap, *bitmap;
 
 static inline struct hfs_inode *get_root_inode(void)
 {
