@@ -38,7 +38,7 @@ struct file openfiles[MAXOPENFILES];
 /**
  * Current working directory.
  */
-struct hfs_inode *cwd;
+struct hfs_dentry *cwd;
 
 #ifdef _HFS_INLINE_DIRECTORY
 static inline void inode_set_inline_flag(struct hfs_inode *inode)
@@ -331,19 +331,19 @@ static inline void init_dentry(struct hfs_dentry *dent,
  * 
  * TODO: Coalescing adjacent free spaces
  */
-static void unlink_dent(struct hfs_dentry *dent)
+static int unlink_dent(struct hfs_dentry *dent)
 {
-	struct hfs_inode *inode = dentry_get_inode(dent);
+	if (strcmp(dent->name, ".") == 0 || strcmp(dent->name, "..") == 0)
+		return -1;
 
-	/* This check should be redundant. */
-	if (inode) {
-		inode->nlink--;	 // Can be done in if clause. I know. Keep quiet.
-		// If inode nlink becomes 0, deallocate that inode.
-		if (inode->nlink == 0) {
-			free_inode(inode);
-		}
+	struct hfs_inode *inode = dentry_get_inode(dent);
+	inode->nlink--;	 // Can be done in if clause. I know. Keep quiet.
+	// If inode nlink becomes 0, deallocate that inode.
+	if (inode->nlink == 0) {
+		free_inode(inode);
 	}
 	dent->inum = 0;
+	return 0;
 }
 
 #ifdef _HFS_INLINE_DIRECTORY
@@ -400,7 +400,7 @@ static int convert_inline_directory(struct hfs_inode *dir)
 	init_dentry(dent, dir, ".");
 	// dot dot entry
 	dent = alloc_dentry_from_block(block, get_dentry_reclen_from_name(".."));
-	init_dentry(dent, &inodes[dir->data.inline_dir.p_inum], "..");
+	init_dentry(dent, inode_from_inum(dir->data.inline_dir.p_inum), "..");
 
 	// Conver the inline directory entries and fill in the block.
 	struct hfs_dentry *inline_dent;
@@ -532,6 +532,8 @@ static void init_rootdir(void)
 	struct hfs_inode *rootino = alloc_inode(T_DIR);     
 	pr_info("Root inum: %d\n", inum(rootino));
 	init_dir_inode(rootino, rootino);	// root inode parent is self
+	sb->rootdir.file_type = T_DIR;
+	sb->rootdir.inum = inum(rootino);
 }
 
 /**
@@ -728,7 +730,6 @@ static void get_filename(const char *pathname, char *name)
 	name[len] = '\0';
 }
 
-
 /*
  * Different types/usages of lookup:
  * 
@@ -752,6 +753,29 @@ static void get_filename(const char *pathname, char *name)
  * 
  */
 
+
+/**
+ * Handling paths containing . or ..
+ * e.g. /usr/local/./src/../
+ * 
+ * This lookup would return the .. dentry of the src/ directory inode,
+ * the pi (parent inode) pointer will poitn to src/. This is correct.
+ * 
+ * If src/ were an inline directory, the dentry returned would be 
+ * a DUMMY dentry that does not exist in the file system, since there
+ * is no actual ".." entry in an inline directory.
+ * 
+ * There is where VFS would make things easier, I suppose.
+ */
+
+/**
+ * Dummy dentry with reserved space for a full-length name.
+ */
+struct hfs_dummy_dentry {
+	struct hfs_dentry 	dent;
+	char				name[DENTRYNAMELEN];
+};
+
 /**
  * Lookup the provided pathname. (No relative pathnames.) 
  * Even if pathname does not start with '/', the file system
@@ -760,42 +784,69 @@ static void get_filename(const char *pathname, char *name)
 static struct hfs_dentry *do_lookup(const char *pathname, struct hfs_inode **pi)
 {
 	struct hfs_dentry *dent = NULL;
-	struct hfs_inode *prev;
+	struct hfs_dentry *prev = NULL;
+	struct hfs_inode *iprev = NULL;
 	const char *pathname_cpy = pathname;
 	char component[DENTRYNAMELEN + 1] = { '\0' };
 
-	prev = (pathname[0] == '/') ? get_root_inode() : cwd;
+#ifdef _HFS_INLINE_DIRECTORY
+	static struct hfs_dummy_dentry dummy_dentry;
+#endif
+
+	prev = (pathname[0] == '/') ? &sb->rootdir : cwd;
 
 	// FIXME: lookup would fail if called with "/"
 	while (get_path_component(&pathname, component)) {
-		if (prev->flags & I_DIRHASH) {
+		iprev = dentry_get_inode(prev);
+		if (iprev->type != T_DIR) 
+			return NULL;
+
+#ifdef _HFS_INLINE_DIRECTORY
+		// Inline directories require special handling with
+		// the "." and ".." entries since they don't really exist.
+		if (inode_is_inline_dir(iprev)) {
+			if (strcmp(component, ".") == 0) {
+				dent = prev;
+				goto step_check;
+			} else if (strcmp(component, "..") == 0) {
+				dent = &dummy_dentry.dent;
+				dent->file_type = T_DIR;
+				dent->inum = iprev->data.inline_dir.p_inum;
+				strcpy(dent->name, "..");
+				dent->namelen = strlen("..") + 1;
+				dent->reclen = get_dentry_reclen_from_name("..");
+				goto step_check;
+			}
+		}
+#endif
+		if (iprev->flags & I_DIRHASH) {
 #ifdef _HFS_DIRHASH
 			struct hfs_dirhash_entry *ent;
-			if ((ent = hfs_dirhash_lookup(prev, component)))
+			if ((ent = hfs_dirhash_lookup(iprev, component)))
 				dent = ent->dent;
 			else
 				dent = NULL;
 #endif
 		} else {
-			dent = lookup_dent(prev, component);
+			dent = lookup_dent(iprev, component);
 		}
-
+step_check:
 		if (!dent) {
 			// If lookup failed on the last component, then fill
 			// in the pi field. Otherwise, set pi field to NULL
 			// to indicate that lookup failed along the way.
 			if (!path_is_empty(pathname))
-				prev = NULL;
+				iprev = NULL;
 			break;
 		}
 		if (!path_is_empty(pathname)) {
 			// Continue traversal, current directory becomes new prev.
-			prev = dentry_get_inode(dent);
+			prev = dent;
 		}
 	}
 
 	if (pi)
-		*pi = prev;
+		*pi = iprev;
 	
 	return dent;
 }
@@ -872,27 +923,18 @@ int fs_creat(const char *pathname)
 }
 
 /**
- * Update a dentry in place. Used for special case of rename()
- * where new path and old path are in the same directory, and
- * new path does not exist.
- * 
- * @return			0 for success, -1 for failure
- */
-static int try_rename_dentry(struct hfs_dentry *dent, const char *new_name)
-{
-	uint16_t reclen = get_dentry_reclen_from_name(new_name);
-	if (dent->reclen >= reclen) {
-		dentry_set_name(dent, new_name);
-		return 0;
-	}
-	return -1;
-}
-
-/**
  * Basic version of the POSIX rename system call.
  * 
  * NOTE: Behaviour when renaming old path to an existing new path:
  *       NEW PATH SHOULD BE OVERWRITTEN.
+ * 
+ * Process of renaming an entry to another:
+ *   Resolve newpath, delete entry if exists.
+ *   Resolve oldpath, delete it.
+ *   Create new entry at new location.
+ * 
+ * The . and .. entries cannot be removed. So if either oldpath or newpath
+ * resolves to a . or .. entry, unlinking them will result in an error.
  */
 int fs_rename(const char *oldpath, const char *newpath)
 {
@@ -902,61 +944,40 @@ int fs_rename(const char *oldpath, const char *newpath)
 
 	// Old path must exist; new path will be overwritten if exists,
 	// but new path's parent directory must be present.
-	if (!(olddent = dir_lookup(oldpath, &olddir)) || !olddir) {
+	if (!(olddent = dir_lookup(oldpath, &olddir)) || !olddir)
 		return -ENOFOUND;
-	}
+	if (strcmp(olddent->name, ".") == 0 || strcmp(olddent->name, "..") == 0)
+		return -EINVAL;
 
-	// The name of the new file
 	char newname[DENTRYNAMELEN];
 	get_filename(newpath, newname);
 
-	// Obtain the inode
 	inode = dentry_get_inode(olddent);
 
+	// remove entry at new path if one exists.
 	newdent = dir_lookup(newpath, &newdir);
 	if (!newdir)
 		return -ENOFOUND;
-
-	// If new path doesn't exist, create it. If it does, overwrite it.
-	if (!newdent) {
-		/* No available dentry at new path. */
-		// Special case: rename is happening in place, then try to simply
-		// change the name by updating olddent.
-		if (newdir == olddir) {
-			if (try_rename_dentry(olddent, newname) == 0) {
-				goto done;  // in place update; everything done.
-			}
-		}
-	} else {
-		// If destination file already exists, then we do not need to 
-		// do anything about the name, just unlink the old inode and 
-		// replace it with a new one.
+	if (newdent) {
 		if (newdent == olddent)
 			return -ESAME;
+		if (newdent->file_type != olddent->file_type)
+			return -EINVTYPE;
 
 		unlink_dent(newdent);
-		newdent->inum = olddent->inum;
 	}
 
-	// Free the old entry. But since doing so will decrement the inode's nlink
-	// and might cause it to be deleted, we first increment it by 1.
-	inode->nlink++;
+	// NOTE: new_dentry may have converted directory from inline to regular,
+	// so we have to unlink before creating new dentry. Since unlink_dent
+	// decreases nlink and we don't need that, we'll preemptively increase
+	// nlink by 1 prior to unlinking the old inode.
+	inode->nlink++;		
 	unlink_dent(olddent);
+	new_dentry(newdir, inode, newname);
+	inode->nlink--;
 
-	if (!newdent) {
-		// Because we've already pre-incremented the nlink count, if
-		// we call new_dentry() here, it needs to be changed back.
-		new_dentry(newdir, inode, newname);
-		inode->nlink--;
-	}
-
-done:
-	// Last step:
-	// If the inode moved is a directory, update its . and .. entries.
-	// (update_dir_inode handles the case of inline directories.)
-	if (inode->type == T_DIR) {
+	if (inode->type == T_DIR)
 		update_dir_inode(inode, newdir);
-	}
 
 	inode_touch_ctime(inode);
 	inode_touch_mtime(newdir);
@@ -1509,7 +1530,7 @@ int fs_chdir(const char *pathname)
 	if (dir->type != T_DIR)
 		return -EINVTYPE;
 	
-	cwd = dir;
+	cwd = dent;
 	return 0;
 }
 
@@ -1588,7 +1609,7 @@ int fs_mount(unsigned long size)
 
 	sb->last_mounted = time(NULL);
 
-	cwd = get_root_inode();
+	cwd = &sb->rootdir;
 
 	pr_info("File system successfully mounted.\n");
 	print_features();
