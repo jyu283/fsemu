@@ -194,6 +194,7 @@ struct hfs_superblock {
 	uint64_t		bitmapstart;	// start of bitmap
 	time_t			creation_time;	// creation time of file system
 	time_t			last_mounted;	// last mount time
+	struct hfs_dentry	rootdir;	// nameless dentry for root.
 };
 
 extern char *fs;
@@ -239,6 +240,6 @@ extern struct file openfiles[MAXOPENFILES];
 /**
  * Current working directory.
  */
-extern struct hfs_inode *cwd;
+extern struct hfs_dentry *cwd;
 
 #endif  // __FS_H__

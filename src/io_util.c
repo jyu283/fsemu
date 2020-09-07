@@ -168,7 +168,7 @@ int ls(const char *pathname)
 	struct hfs_inode *src;
 	const char *name;
 	if (!pathname) {
-		src = cwd;
+		src = dentry_get_inode(cwd);
 		name = "";
 	} else {
 		struct hfs_dentry *src_dent;
