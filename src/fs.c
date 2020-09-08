@@ -98,8 +98,8 @@ static void init_superblock(size_t size)
 	// Here, number of data blocks are overestimated for convenience
 	int bitmap_blocks = (total_blocks / 8) / BSIZE;
 
-	int nblocks = total_blocks - 1 - inode_blocks - bitmap_blocks;
-	sb->datastart = inode_blocks + bitmap_blocks;
+	sb->datastart = sb->bitmapstart + bitmap_blocks + 1;
+	int nblocks = total_blocks - sb->datastart + 1;
 	sb->nblocks = nblocks;
 
 	inodes = BLKADDR(sb->inodestart);
