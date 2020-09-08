@@ -104,14 +104,24 @@ static void init_superblock(size_t size)
 
 	inodes = BLKADDR(sb->inodestart);
 	bitmap = BLKADDR(sb->bitmapstart);
+	inobitmap = BLKADDR(sb->inodebitmapstart);
 
 	sb->creation_time = (uint64_t)time(NULL);
 }
 
 /**
+ * Initialise bitmaps.
+ */
+static inline void init_bitmaps(void)
+{
+	// set inode #0 so root inode will be allocated to 1.
+	inobitmap[0] |= 1;
+}
+
+/**
  * Read from an existing superblock to populate the global variables.
  */
-static inline void read_sb()
+static inline void read_sb(void)
 {
 	sb = (struct hfs_superblock *)fs;
 	inodes = BLKADDR(sb->inodestart);
@@ -191,6 +201,27 @@ static void init_inode(struct hfs_inode *inode, uint8_t type)
 	inode_touch_ctime(inode);
 }
 
+/**
+ * Find a free inode from the inode bitmap and return its inum.
+ */
+static int get_free_inum(void)
+{
+	int inum = 0;
+	for (int i = 0; i < sb->ninodes / 8; i++) {
+		if (inobitmap[i] != 0xff) {
+			for (int j = 0; j < 8; j++) {
+				if (((inobitmap[i] >> j) & 1) == 0) {
+					inobitmap[i] |= 1 << j;
+					inum = i * 8 + j;
+					goto out;
+				}
+			}
+		}
+	}
+out:
+	return inum;
+}
+
 /*
  * Locates an unused (T_UNUSED) inode from the inode pool
  * and returns a pointer to that inode. Also initializes 
@@ -198,16 +229,14 @@ static void init_inode(struct hfs_inode *inode, uint8_t type)
  */
 static struct hfs_inode *alloc_inode(uint8_t type)
 {
-	/* Inode 0 is reserved! */
-	struct hfs_inode *inode;
-	for (int i = 1; i < sb->ninodes; i++) {
-		inode = &inodes[i];
-		if (inode->type == T_UNUSED) {
-			init_inode(inode, type);
-			return inode;
-		}
+	int inum;
+	if (!(inum = get_free_inum()))
+		return NULL;
+	else {
+		struct hfs_inode *inode = inode_from_inum(inum);
+		init_inode(inode, type);
+		return inode;
 	}
-	return NULL;
 }
 
 /**
@@ -235,6 +264,12 @@ static int free_inode(struct hfs_inode *inode)
 
 	inode->type = T_UNUSED;
 	sb->inode_used--;
+
+	int ino = inum(inode);
+	int byte = ino / 8;
+	int bit = ino % 8;
+	inobitmap[byte] &= ~(1 << bit);
+
 	return 0;
 }
 
@@ -553,6 +588,7 @@ static void init_fd(void)
 static int init_fs(size_t size)
 {
 	init_superblock(size);	// fill in superblock
+	init_bitmaps();
 	init_rootdir();			// create root directory
 
 	pr_debug("Inode size: %ld\n", sizeof(struct hfs_inode));
@@ -1625,6 +1661,8 @@ int fs_unmount(void)
 		return -1;
 
 	free_caches();
+	printf("Quitting fsemu...\n");
+	fflush(stdout);
 	munmap(fs, sb->size * BSIZE);
 	fs = NULL;
 	return 0;
