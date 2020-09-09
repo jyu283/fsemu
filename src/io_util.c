@@ -150,12 +150,19 @@ static void ls_dir(struct hfs_inode *dir, const char *name)
 		return;
 	} 
 #endif
+
+#ifdef _HFS_DIRHASH
+	if (dir->flags & I_DIRHASH) {
+		print_dentry_block(dir->data.dirhash_rec.block);
+		return;
+	}
+#endif
+
 	for (int i = 0; i < NBLOCKS; i++) {
 		if (dir->data.blocks[i]) {
 			print_dentry_block(dir->data.blocks[i]);
 		}
 	}
-	
 }
 
 /**
