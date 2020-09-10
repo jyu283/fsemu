@@ -227,6 +227,16 @@ static void put_directory(struct hfs_dirhash_table *dt, struct hfs_inode *dir)
 }
 
 /**
+ * Refresh a dirhash table for a new allocation.
+ */
+static void dt_refresh(struct hfs_dirhash_table *dt)
+{
+    dt->capacity = 0;
+    dt->seqno++;
+    dt->inum = 0;
+}
+
+/**
  * Allocate a dirhash table for the specified directory,
  * and load all directory entries.
  */
@@ -234,7 +244,7 @@ static struct hfs_dirhash_table *dir_alloc_table(struct hfs_inode *dir)
 {
     struct hfs_dirhash_table *dt;
     dt = lru_get_last();
-    dt->seqno++;
+    dt_refresh(dt);
     dt->inum = inum(dir);
     dir->data.dirhash_rec.seqno = dt->seqno;
     dir->data.dirhash_rec.id = hfs_dirhash_get_id(dt);
@@ -425,8 +435,11 @@ static void dirhash_table_dump(struct hfs_dirhash_table *dt)
  */
 void hfs_dirhash_clear(void)
 {
-    hfs_dirhash_free();
-    hfs_dirhash_init();
+    struct hfs_dirhash_table *dt;
+    for (int i = 0; i < HFS_DIRHASH_SIZE; i++) {
+        dt = hfs_dirhash_get_table(i);
+        dt_refresh(dt);
+    }
 }
 
 #ifdef HFS_DEBUG
