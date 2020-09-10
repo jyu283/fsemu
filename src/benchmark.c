@@ -88,9 +88,10 @@ int benchmark_lookup(const char *input_file, int repcount)
 		return -1;
 	}
 
-	hfs_dirhash_stat_clear();
 	begin = clock();
 	for (int i = 0; i < repcount; i++) {
+		hfs_dirhash_clear();
+		hfs_dirhash_stat_clear();
 		counter = 0;
 		while (getline(&line, &len, fp) != -1 && ++counter < 300) {
 			line[strlen(line) - 1] = '\0';  // clear trailing \n
