@@ -668,6 +668,11 @@ dir * lookupParent( dir * root, char * path ){
   return parentDir;
 }
 
+int localMove = 0;
+int distantJump = 0;
+int repeat = 0;
+
+
 void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLocal,
 		 int tLocal, int numEntries, FILE * out)
 {
@@ -821,6 +826,8 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
     if(rand() % 100 <= tLocal){
       //reprint lastPrint
       fprintf( out, "%s\n", lastPrint);
+      //Track Stats
+      repeat++;
       continue;
     }
     if(strictSLocal){
@@ -830,6 +837,9 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
       while(counter < limit){
 	int stay = rand() % 100;
 	if(stay <= sLocal){
+	  //Track Stats  
+	  localMove++;
+	  
 	  if((rand() % 2 == 0 || curr->dirs == NULL) && curr->files != NULL){
 	    //pick new file
 	    int numFiles = 0;
@@ -890,6 +900,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	    printf("Program Aborted: Subtree chosen is too shallow and has no children\n");
 	    exit(-1);
 	  }
+	  
 
 	  if( upORdown== 0){
 	    //move dir up
@@ -936,13 +947,15 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
     }else{
       int moveChance = 20;
       if(rand()% 100 <= moveChance){
+	//Track Stats  
+	distantJump++;
 	//major move across tree;
 	//Pick Starting Location Depth       
-	int depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
+	depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
 	//printf("New Depth = %d\n", depth);
 	//Pick Starting Location ... curr ... the parent directory
-	int whichAtDepth = rand() % depthInfoArray[depth].num;
-	dir * curr = depthInfoArray[depth].first;
+	whichAtDepth = rand() % depthInfoArray[depth].num;
+	curr = depthInfoArray[depth].first;
 
 	for( int i = 0; i< whichAtDepth; i++ ){
 	  curr = curr->depthNext;
@@ -968,6 +981,8 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 	//printf("Depth= %d\n", depth);
         int stay = rand() % 100;
         if(stay <= sLocal){
+	  //Track Stats  
+	  localMove++;
           if((rand() % 2 == 0 || curr->dirs == NULL) && curr->files != NULL){
             //pick new file                                                                                              
             int numFiles = 0;
@@ -1010,6 +1025,7 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 
         }else{
           int upORdown;
+	  assert(depth != 0);
           //need to define min and max Depth and track active depth
           if((curr->dirs == NULL && depth != minDepth) || (depth == maxDepth && minDepth != maxDepth)){
             upORdown = 0;
@@ -1026,14 +1042,18 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
             }
             counter++;
           }else{
+	    //Track Stats
+	    distantJump++;
             //printf("Subtree chosen is too shallow and has no children\n");
-	    int depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
-	    int whichAtDepth = rand() % depthInfoArray[depth].num;
-	    dir * curr = depthInfoArray[depth].first;
+	    depth = rand() % (maxDepth - minDepth + 1) + (minDepth);
+	    whichAtDepth = rand() % depthInfoArray[depth].num;
+	    curr = depthInfoArray[depth].first;
 
 	    for( int i = 0; i< whichAtDepth; i++ ){
 	      curr = curr->depthNext;
 	    }
+
+	    //depth = newDepth;
 
 	    sprintf(tempPath, "%s/", curr->name);
 	    Parent = curr->parent;
@@ -1054,11 +1074,21 @@ void workloadGen(dir *root, char * path, char Depth, int sLocal, bool strictSLoc
 
 	    int len = strlen(currPath);
             int start = len - 2;
+	    int origStart = start;
+
+	    assert(start >= 0);
             char c = currPath[start];
-	    //printf("%s\n", currPath);
-            while( c != '/' ){
+	    printf("%s\n", currPath);
+	    printf("%d\n", depth);
+	    assert((strlen("root/") != strlen(currPath)));
+	    assert((strcmp(currPath,"root/") != 0));
+
+	    while( c != '/' ){
 	      //printf("start = %d, c = %c\n", start, c);
 	      start = start - 1;
+	      if (start <= -1){
+		printf ("ASSERT origStart %d start %d currPath %s c %c \n", origStart, start,currPath, c);
+	      }
 	      assert(start > -1);
 	      c = currPath[start];
             }
@@ -1442,6 +1472,7 @@ int main(int argc, char *argv[]){
   //CAll workload Gen                                                                                                                  
   if ( doWorkload == true ){
     workloadGen(&root, "root/", wDepth, sLocal, isStrict, tLocal, numEntries, workOut);
+    printf("\n\nNum Entries = %d; Repeats = %d; Local Moves = %d; Distance Jumps = %d;\n\n", numEntries, repeat, localMove, distantJump);
   }
 
   
