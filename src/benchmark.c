@@ -15,6 +15,45 @@
 #include <time.h>
 
 /**
+ * Fill a char array with len random characters.
+ */
+static void gen_rand_str(char *s, const int len) 
+{
+    static const char alphanum[] =     
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (int i = 0; i < len - 1; ++i)
+        s[i] = alphanum[rand() % (sizeof(alphanum) - 1)];
+    s[len - 1] = '\0';
+}
+
+/**
+ * Fill a given directory with n random entries.
+ */
+static void fill_dir(const char *dirpath, int n)
+{
+	int ret, dirpathlen;
+	char name[16];
+	char pathname[BSIZE];
+
+	pr_info("\nmkdir %s\n", dirpath);
+
+	// copy of the original pathname to append to.
+	strcpy(pathname, dirpath);
+	dirpathlen = strlen(pathname);
+	for (int i = 0; i < n; i++) {
+		gen_rand_str(name, 16);
+		strcat(pathname, name);
+		pr_info("creat %s\n", pathname);
+		if ((ret = fs_creat(pathname)) < 0) {
+			fs_pstrerror(ret, "fill_dir");
+			break;
+		}
+		// reset to original pathname
+		pathname[dirpathlen] = '\0';
+	}
+}
+
+/**
  * Populate the file system based on the input file.
  * The input file will contain a list of pathnames, and 
  * this function will call creat on each pathname.
@@ -54,6 +93,7 @@ int benchmark_init_fs(const char *input_file)
 		pathname = line + 2;
 		if (line[0] == 'D') {
 			ret = fs_mkdir(pathname);
+			fill_dir(pathname, 10);	// Testing
 		} else if (line[0] == 'F') {
 			ret = fs_creat(pathname);
 		} else {
