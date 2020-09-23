@@ -188,7 +188,7 @@ int ls(const char *pathname)
 	// For now only prints out the root's contents
 	ls_dir(src, name);
 	puts("");
-	pr_info("Total inodes in use: %lu\n", sb->inode_used);
+	pr_info("Total inodes in use: %lu/%lu\n", sb->inode_used, sb->ninodes);
 	pr_info("Directories: %lu total. Files: %lu total.\n", 
 							sb->ndirectories, sb->nfiles);
 	pr_info("Total inline inodes: %lu\n", sb->inline_inodes);
